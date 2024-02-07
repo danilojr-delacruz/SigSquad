@@ -1,36 +1,43 @@
 import numpy as np
-import tensorflow as tf
+import pandas as pd
+from torch.utils.data import Dataset
 
-# TODO: Does TARGETS need to be a global variable?
-def create_non_overlapping_eeg_data(df, TARGETS):
-    """Only use one eeg for each eeg id as test dataset doesn"t have overlaps"""
+from constants import TARGETS
 
-    # Create non-overlapping eeg id data
-    train = df.groupby("eeg_id")[["spectrogram_id","spectrogram_label_offset_seconds"]].agg(
-        {"spectrogram_id":"first","spectrogram_label_offset_seconds":"min"})
-    train.columns = ["spec_id","min"]
+# TODO: Why is this not in its own file? I guess it is computed very quickly.
+def create_non_overlapping_eeg_data(eeg_metadata_df):
+    """Create a new metadata file which integrates all sub_eeg_id."""
 
-    tmp = df.groupby("eeg_id")[["spectrogram_id","spectrogram_label_offset_seconds"]].agg(
-        {"spectrogram_label_offset_seconds":"max"})
-    train["max"] = tmp
+    # For each eeg_id (recall that this is the full recording)
+    # - We take the associated spectrogram_id
+    # - We find the min offset in the spectrogram
+    # - Same with the max
+    # - Get the patient_id
+    # - Then below we compute the expert vote distribution
+    train = eeg_metadata_df.groupby("eeg_id").agg(
+        spec_id = pd.NamedAgg("spectrogram_id", "first"),
+        min = pd.NamedAgg("spectrogram_label_offset_seconds", "min"),
+        max = pd.NamedAgg("spectrogram_label_offset_seconds", "max"),
+        patient_id = pd.NamedAgg("patient_id", "first"),
+        target = pd.NamedAgg("expert_consensus", "first")
+        )
 
-    tmp = df.groupby("eeg_id")[["patient_id"]].agg("first")
-    train["patient_id"] = tmp
+    # TODO: Investigate further. Surely the vote distribution could change over time.
+    # And if we're only doing the first eeg segment then this number is not representative
+    # On the other hand this is only one recording and this can be seen as a
+    # long term average and perhaps more representative of what the doctor will diagnose.
+    # Even though the test only has one eeg_segment, perhaps doctor saw more
 
-    tmp = df.groupby("eeg_id")[TARGETS].agg("sum")
-    for t in TARGETS:
-        train[t] = tmp[t].values
+    # For each eeg_id, we have the total number of votes across all eeg segments
+    # Why not in above groupby: Easier to do a for loop due to additional logic
+    total_votes = eeg_metadata_df.groupby("eeg_id")[TARGETS].agg("sum")
+    # Normalise so values represent a proportion (which sum to 1)
+    total_votes = total_votes.div(total_votes.sum(axis=1), axis=0)
+    for vote_label in TARGETS:
+        train[vote_label] = total_votes[vote_label]
 
-    y_data = train[TARGETS].values
-    y_data = y_data / y_data.sum(axis=1,keepdims=True)
-    train[TARGETS] = y_data
-
-    tmp = df.groupby("eeg_id")[["expert_consensus"]].agg("first")
-    train["target"] = tmp
-
+    # Have an index of 0, 1, ..., N as opposed to eeg_id
     train = train.reset_index()
-    print("Train non-overlapping eeg_id shape:", train.shape )
-    train.head()
 
     return train
 
