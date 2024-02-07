@@ -46,11 +46,11 @@ def create_modified_eeg_metadata_df(eeg_metadata_df):
 # https://pytorch.org/tutorials/beginner/basics/data_tutorial.html
 class DataGenerator(Dataset):
     "Generates data for Keras"
-    def __init__(self, data, specs, eeg_specs, transform=None,
+    def __init__(self, metadata, specs, eeg_specs, transform=None,
                  batch_size=32, shuffle=False, augment=False, mode="train"):
 
         # Core data
-        self.data = data
+        self.metadata = metadata
         self.specs = specs
         self.eeg_specs = eeg_specs
 
@@ -74,7 +74,7 @@ class DataGenerator(Dataset):
         self.num_spectrograms = 8
 
     def __len__(self):
-        return len(self.data)
+        return len(self.metadata)
 
     # TODO: Should this be done in the training loop
     # as opposed to the DataLoader?
@@ -105,7 +105,8 @@ class DataGenerator(Dataset):
         img = np.ones((self.img_width, self.img_height),dtype="float32")
 
         for j,i in enumerate(idx):
-            row = self.data.iloc[i]
+            row = self.metadata.iloc[i]
+            # TODO: Why use this?
             # if self.mode=="test":
             #     r = 0
             r = int( (row["min"] + row["max"])//4 )
