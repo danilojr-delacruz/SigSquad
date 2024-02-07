@@ -96,7 +96,10 @@ class DataGenerator(Dataset):
         "Generates data containing batch_size samples"
 
         # idx will contain the indices for our batch
-        # Shape is (batch_size, )
+        # Shape is (batch_size, width, height, num_channels)
+        # TODO: PyTorch uses channels first.
+        # Keep like this for downstream compatibility. But change to faster one.
+        # (Between channel first and last)
         X = np.zeros((self.batch_size, self.img_width, self.img_height, self.num_spectrograms), dtype="float32")
         y = np.zeros((self.batch_size, self.num_targets), dtype="float32")
         img = np.ones((self.img_width, self.img_height),dtype="float32")
