@@ -76,6 +76,8 @@ class DataGenerator(Dataset):
     def __len__(self):
         return len(self.data)
 
+    # TODO: Should this be done in the training loop
+    # as opposed to the DataLoader?
     def transform(self, img):
         # LOG TRANSFORM SPECTROGRAM
         img = np.clip(img,np.exp(-4),np.exp(8))
