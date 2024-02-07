@@ -42,17 +42,14 @@ def create_modified_eeg_metadata_df(eeg_metadata_df):
     return train
 
 
-# Refer to this to understand Dataset
-# https://pytorch.org/tutorials/beginner/basics/data_tutorial.html
-class DataGenerator(Dataset):
-    "Generates data for Keras"
-    def __init__(self, metadata, specs, eeg_specs, transform=None,
-                 batch_size=32, shuffle=False, augment=False, mode="train"):
+class BaseDataset(Dataset):
+    """Gives spectrograms."""
+    def __init__(self, metadata, transform=None,
+                 batch_size=32, shuffle=False, augment=False,
+                 mode="train"):
 
         # Core data
         self.metadata = metadata
-        self.specs = specs
-        self.eeg_specs = eeg_specs
 
         self.batch_size = batch_size
         self.shuffle = shuffle
@@ -150,7 +147,7 @@ class DataGenerator(Dataset):
             # (300, 100, 4)
             # (100, 300, 4)
             kaggle_spectrograms = \
-                self.specs[spectrogram_id][offset: offset+300] \
+                self.get_spectrogram(spectrogram_id)[offset: offset+300] \
                     .reshape(300, 4, 100) \
                     .swapaxes(1, 2) \
                     .swapaxes(0, 1)
@@ -163,9 +160,63 @@ class DataGenerator(Dataset):
             X[i, 14:-14, :, :4] = kaggle_spectrograms[..., 22:-22, :] / 2.0
 
             # EEG SPECTROGRAMS, already processed?
-            eeg_spectrograms = self.eeg_specs[eeg_spectrogram_id]
+            eeg_spectrograms = self.get_eeg_spectrogram(eeg_spectrogram_id)
             X[i, :, :, 4:] = eeg_spectrograms
 
             y[i] = row[TARGETS]
 
         return X, y
+
+    def get_spectrogram(self, spectrogram_id):
+        pass
+
+    def get_eeg_spectrogram(self, eeg_spectrogram_id):
+        pass
+
+
+# TODO: Maybe consider doing an LRU sort of thing?
+# But actually most likely just going to have enough resources to
+# hold everything in RAM and so we use PreloadedDataset for speed
+class LazyDataset(BaseDataset):
+    """Reads te spectrograms from path"""
+    def __init__(self, metadata, spectrogram_dir, eeg_spectrogram_dir,
+                 transform=None, batch_size=32, shuffle=False, augment=False,
+                 mode="train"):
+
+        self.spectrogram_dir = spectrogram_dir
+        self.eeg_spectrogram_dir = eeg_spectrogram_dir
+
+        super().__init__(metadata, transform,
+                         batch_size, shuffle, augment, mode)
+
+    def get_spectrogram(self, spectrogram_id):
+        spectrogram = pd.read_parquet(
+            f"{self.spectrogram_dir}/{spectrogram_id}.parquet")
+        # Get rid of the time column (first column)
+        # and convert to numpy
+        spectrogram = spectrogram.iloc[:, 1:].to_numpy()
+        return spectrogram
+
+    def get_eeg_spectrogram(self, eeg_spectrogram_id):
+        eeg_spectrogram = np.load(
+            f"{self.eeg_spectrogram_dir}/{eeg_spectrogram_id}.npy")
+        return eeg_spectrogram
+
+
+class PreloadedDataset(BaseDataset):
+    """Has spectrogram dictionaries which have the data preloaded"""
+    def __init__(self, metadata, spectrograms, eeg_spectrograms,
+                 transform=None, batch_size=32, shuffle=False, augment=False,
+                 mode="train"):
+
+        self.spectrograms = spectrograms
+        self.eeg_spectrograms = eeg_spectrograms
+
+        super().__init__(metadata, transform,
+                         batch_size, shuffle, augment, mode)
+
+    def get_spectrogram(self, spectrogram_id):
+        return self.spectrograms[spectrogram_id]
+
+    def get_eeg_spectrogram(self, eeg_spectrogram_id):
+        return self.eeg_spectrograms[eeg_spectrogram_id]
