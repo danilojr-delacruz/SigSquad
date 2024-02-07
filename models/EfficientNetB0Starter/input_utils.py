@@ -1,4 +1,8 @@
-def create_non_overlapping_eeg_data(df):
+import numpy as np
+import tensorflow as tf
+
+# TODO: Does TARGETS need to be a global variable?
+def create_non_overlapping_eeg_data(df, TARGETS):
     """Only use one eeg for each eeg id as test dataset doesn"t have overlaps"""
 
     # Create non-overlapping eeg id data
@@ -31,11 +35,12 @@ def create_non_overlapping_eeg_data(df):
     return train
 
 
+# TODO: Migrate onto PyTorch Lightning
 # Train Dataloader
 class DataGenerator(tf.keras.utils.Sequence):
     "Generates data for Keras"
-    def __init__(self, data, batch_size=32, shuffle=False, augment=False, mode="train",
-                 specs = spectrograms, eeg_specs = all_eegs):
+    def __init__(self, data, specs, eeg_specs, TARGETS,
+                 batch_size=32, shuffle=False, augment=False, mode="train"):
 
         self.data = data
         self.batch_size = batch_size
@@ -46,6 +51,8 @@ class DataGenerator(tf.keras.utils.Sequence):
         self.specs = specs
         self.eeg_specs = eeg_specs
         self.on_epoch_end()
+
+        self.TARGETS = TARGETS
 
     def __len__(self):
         "Denotes the number of batches per epoch"
@@ -100,6 +107,6 @@ class DataGenerator(tf.keras.utils.Sequence):
             X[j,:,:,4:] = img
 
             if self.mode!="test":
-                y[j,] = row[TARGETS]
+                y[j,] = row[self.TARGETS]
 
         return X,y

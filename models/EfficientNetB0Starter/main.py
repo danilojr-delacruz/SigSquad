@@ -43,14 +43,16 @@ print("TensorFlow version =",tf.__version__)
 #     print("Using full precision")
 
 
+from input_utils import create_non_overlapping_eeg_data, DataGenerator
+
 
 # 1. Reading Data --------------------------------------------------------------
 
 
 
 df = pd.read_csv(TRAIN_CSV_DIR)
-train = create_non_overlapping_eeg_data(df)
 TARGETS = df.columns[-6:]
+train = create_non_overlapping_eeg_data(df, TARGETS)
 print("Train shape:", df.shape )
 print("Targets", list(TARGETS))
 
@@ -118,8 +120,10 @@ for i, (train_index, valid_index) in enumerate(gkf.split(train, train.target, tr
     print("#"*25)
     print(f"### Fold {i+1}")
 
-    train_gen = DataGenerator(train.iloc[train_index], shuffle=True, batch_size=32, augment=False)
-    valid_gen = DataGenerator(train.iloc[valid_index], shuffle=False, batch_size=64, mode="valid")
+    train_gen = DataGenerator(train.iloc[train_index], spectrograms, all_eegs, TARGETS,
+                              shuffle=True, batch_size=32, augment=False)
+    valid_gen = DataGenerator(train.iloc[valid_index], spectrograms, all_eegs, TARGETS,
+                              shuffle=False, batch_size=64, mode="valid")
 
     print(f"### train size {len(train_index)}, valid size {len(valid_index)}")
     print("#"*25)
@@ -295,8 +299,8 @@ for i,eeg_id in enumerate(EEG_IDS2):
 # INFER EFFICIENTNET ON TEST
 preds = []
 model = build_model()
-test_gen = DataGenerator(test, shuffle=False, batch_size=64, mode="test",
-                         specs = spectrograms2, eeg_specs = all_eegs2)
+test_gen = DataGenerator(test, spectrograms2, all_eegs2, TARGETS,
+                         shuffle=False, batch_size=64, mode="test")
 
 for i in range(5):
     print(f"Fold {i+1}")
