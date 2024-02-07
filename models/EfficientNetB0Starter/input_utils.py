@@ -16,8 +16,8 @@ def create_modified_eeg_metadata_df(eeg_metadata_df):
     # - Then below we compute the expert vote distribution
     train = eeg_metadata_df.groupby("eeg_id").agg(
         spec_id = pd.NamedAgg("spectrogram_id", "first"),
-        min = pd.NamedAgg("spectrogram_label_offset_seconds", "min"),
-        max = pd.NamedAgg("spectrogram_label_offset_seconds", "max"),
+        min_offset_seconds = pd.NamedAgg("spectrogram_label_offset_seconds", "min"),
+        max_offset_seconds = pd.NamedAgg("spectrogram_label_offset_seconds", "max"),
         patient_id = pd.NamedAgg("patient_id", "first"),
         target = pd.NamedAgg("expert_consensus", "first")
         )
@@ -106,7 +106,7 @@ class DataGenerator(Dataset):
 
         for j,i in enumerate(idx):
             row = self.metadata.iloc[i]
-            r = int( (row["min"] + row["max"])//4 )
+            r = int( (row["min_offset_seconds"] + row["max_offset_seconds"])//4 )
 
             for k in range(4):
                 # EXTRACT 300 ROWS OF SPECTROGRAM
