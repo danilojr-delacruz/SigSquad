@@ -87,8 +87,6 @@ all_eegs = np.load(EEG_SPECTROGRAM_DIR,allow_pickle=True).item()
 
 
 # Train Dataloader
-import albumentations as albu
-
 # This gives the mapping between labels and their class id
 LABEL_TO_ID = {"Seizure":0, "LPD":1, "GPD":2, "LRDA":3, "GRDA":4, "Other":5}
 ID_TO_LABEL = {x:y for y,x in LABEL_TO_ID.items()}
@@ -101,6 +99,7 @@ class DataGenerator(tf.keras.utils.Sequence):
         self.data = data
         self.batch_size = batch_size
         self.shuffle = shuffle
+        # TODO: Not implemented yet, will need albumentations
         self.augment = augment
         self.mode = mode
         self.specs = specs
@@ -116,7 +115,6 @@ class DataGenerator(tf.keras.utils.Sequence):
         "Generate one batch of data"
         indexes = self.indexes[index*self.batch_size:(index+1)*self.batch_size]
         X, y = self.__data_generation(indexes)
-        if self.augment: X = self.__augment_batch(X)
         return X, y
 
     def on_epoch_end(self):
@@ -164,18 +162,6 @@ class DataGenerator(tf.keras.utils.Sequence):
                 y[j,] = row[TARGETS]
 
         return X,y
-
-    def __random_transform(self, img):
-        composition = albu.Compose([
-            albu.HorizontalFlip(p=0.5),
-            #albu.CoarseDropout(max_holes=8,max_height=32,max_width=32,fill_value=0,p=0.5),
-        ])
-        return composition(image=img)["image"]
-
-    def __augment_batch(self, img_batch):
-        for i in range(img_batch.shape[0]):
-            img_batch[i, ] = self.__random_transform(img_batch[i, ])
-        return img_batch
 
 
 # 2. Build Model ---------------------------------------------------------------
