@@ -43,7 +43,7 @@ print("TensorFlow version =",tf.__version__)
 #     print("Using full precision")
 
 
-from input_utils import create_non_overlapping_eeg_data, DataGenerator
+from input_utils import create_modified_eeg_metadata_df, DataGenerator
 from constants import TARGETS
 
 # 1. Reading Data --------------------------------------------------------------
@@ -51,7 +51,7 @@ from constants import TARGETS
 
 
 df = pd.read_csv(TRAIN_CSV_DIR)
-train = create_non_overlapping_eeg_data(df)
+eeg_metadata_df = create_modified_eeg_metadata_df(df)
 print("Train shape:", df.shape )
 print("Targets", list(TARGETS))
 
@@ -114,14 +114,14 @@ all_oof = []
 all_true = []
 
 gkf = GroupKFold(n_splits=5)
-for i, (train_index, valid_index) in enumerate(gkf.split(train, train.target, train.patient_id)):
+for i, (train_index, valid_index) in enumerate(gkf.split(eeg_metadata_df, eeg_metadata_df.target, eeg_metadata_df.patient_id)):
 
     print("#"*25)
     print(f"### Fold {i+1}")
 
-    train_gen = DataGenerator(train.iloc[train_index], spectrograms, all_eegs,
+    train_gen = DataGenerator(eeg_metadata_df.iloc[train_index], spectrograms, all_eegs,
                               shuffle=True, batch_size=32, augment=False)
-    valid_gen = DataGenerator(train.iloc[valid_index], spectrograms, all_eegs,
+    valid_gen = DataGenerator(eeg_metadata_df.iloc[valid_index], spectrograms, all_eegs,
                               shuffle=False, batch_size=64, mode="valid")
 
     print(f"### train size {len(train_index)}, valid size {len(valid_index)}")
@@ -140,7 +140,7 @@ for i, (train_index, valid_index) in enumerate(gkf.split(train, train.target, tr
 
     oof = model.predict(valid_gen, verbose=1)
     all_oof.append(oof)
-    all_true.append(train.iloc[valid_index][TARGETS].values)
+    all_true.append(eeg_metadata_df.iloc[valid_index][TARGETS].values)
 
     del model, oof
     gc.collect()
