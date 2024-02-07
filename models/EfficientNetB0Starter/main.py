@@ -1,13 +1,13 @@
 VER = 5
 
 # Contains all of the eegs together in one file - faster
-TRAIN_CSV_DIR = '/kaggle/input/hms-harmful-brain-activity-classification/train.csv'
-KAGGLE_SPECTROGRAM_DIR = '/kaggle/input/brain-spectrograms/specs.npy'
-EEG_SPECTROGRAM_DIR = '/kaggle/input/brain-eeg-spectrograms/eeg_specs.npy'
+TRAIN_CSV_DIR = "/kaggle/input/hms-harmful-brain-activity-classification/train.csv"
+KAGGLE_SPECTROGRAM_DIR = "/kaggle/input/brain-spectrograms/specs.npy"
+EEG_SPECTROGRAM_DIR = "/kaggle/input/brain-eeg-spectrograms/eeg_specs.npy"
 
 # # IF THIS EQUALS NONE, THEN WE TRAIN NEW MODELS
 # # IF THIS EQUALS DISK PATH, THEN WE LOAD PREVIOUSLY TRAINED MODELS
-LOAD_MODELS_FROM = '/kaggle/input/brain-efficientnet-models-v3-v4-v5/'
+LOAD_MODELS_FROM = "/kaggle/input/brain-efficientnet-models-v3-v4-v5/"
 USE_KAGGLE_SPECTROGRAMS = True
 USE_EEG_SPECTROGRAMS = True
 
@@ -18,46 +18,46 @@ os.environ["CUDA_VISIBLE_DEVICES"]="0,1"
 import tensorflow as tf
 import pandas as pd, numpy as np
 import matplotlib.pyplot as plt
-print('TensorFlow version =',tf.__version__)
+print("TensorFlow version =",tf.__version__)
 
 # TODO: What to do about GPUs and Mixed Precision?
 # # USE MULTIPLE GPUS
-# gpus = tf.config.list_physical_devices('GPU')
+# gpus = tf.config.list_physical_devices("GPU")
 # if len(gpus)<=1:
 #     strategy = tf.distribute.OneDeviceStrategy(device="/gpu:0")
-#     print(f'Using {len(gpus)} GPU')
+#     print(f"Using {len(gpus)} GPU")
 # else:
 #     strategy = tf.distribute.MirroredStrategy()
-#     print(f'Using {len(gpus)} GPUs')
+#     print(f"Using {len(gpus)} GPUs")
 
 # # USE MIXED PRECISION
 # MIX = True
 # if MIX:
-#     tf.config.optimizer.set_experimental_options({'auto_mixed_precision': True})
-#     print('Mixed precision enabled')
+#     tf.config.optimizer.set_experimental_options({"auto_mixed_precision": True})
+#     print("Mixed precision enabled")
 # else:
-#     print('Using full precision')
+#     print("Using full precision")
 
 
 
 # 1. Reading Data --------------------------------------------------------------
 
 def create_non_overlapping_eeg_data(df):
-    '''Only use one eeg for each eeg id as test dataset doesn't have overlaps'''
+    """Only use one eeg for each eeg id as test dataset doesn"t have overlaps"""
 
     # Create non-overlapping eeg id data
-    train = df.groupby('eeg_id')[['spectrogram_id','spectrogram_label_offset_seconds']].agg(
-        {'spectrogram_id':'first','spectrogram_label_offset_seconds':'min'})
-    train.columns = ['spec_id','min']
+    train = df.groupby("eeg_id")[["spectrogram_id","spectrogram_label_offset_seconds"]].agg(
+        {"spectrogram_id":"first","spectrogram_label_offset_seconds":"min"})
+    train.columns = ["spec_id","min"]
 
-    tmp = df.groupby('eeg_id')[['spectrogram_id','spectrogram_label_offset_seconds']].agg(
-        {'spectrogram_label_offset_seconds':'max'})
-    train['max'] = tmp
+    tmp = df.groupby("eeg_id")[["spectrogram_id","spectrogram_label_offset_seconds"]].agg(
+        {"spectrogram_label_offset_seconds":"max"})
+    train["max"] = tmp
 
-    tmp = df.groupby('eeg_id')[['patient_id']].agg('first')
-    train['patient_id'] = tmp
+    tmp = df.groupby("eeg_id")[["patient_id"]].agg("first")
+    train["patient_id"] = tmp
 
-    tmp = df.groupby('eeg_id')[TARGETS].agg('sum')
+    tmp = df.groupby("eeg_id")[TARGETS].agg("sum")
     for t in TARGETS:
         train[t] = tmp[t].values
 
@@ -65,11 +65,11 @@ def create_non_overlapping_eeg_data(df):
     y_data = y_data / y_data.sum(axis=1,keepdims=True)
     train[TARGETS] = y_data
 
-    tmp = df.groupby('eeg_id')[['expert_consensus']].agg('first')
-    train['target'] = tmp
+    tmp = df.groupby("eeg_id")[["expert_consensus"]].agg("first")
+    train["target"] = tmp
 
     train = train.reset_index()
-    print('Train non-overlapping eeg_id shape:', train.shape )
+    print("Train non-overlapping eeg_id shape:", train.shape )
     train.head()
 
     return train
@@ -77,8 +77,8 @@ def create_non_overlapping_eeg_data(df):
 df = pd.read_csv(TRAIN_CSV_DIR)
 train = create_non_overlapping_eeg_data(df)
 TARGETS = df.columns[-6:]
-print('Train shape:', df.shape )
-print('Targets', list(TARGETS))
+print("Train shape:", df.shape )
+print("Targets", list(TARGETS))
 
 # Read precomputed spectrograms (from kaggle and eeg) that are all placed in one file
 # TODO: Download these files
@@ -90,12 +90,12 @@ all_eegs = np.load(EEG_SPECTROGRAM_DIR,allow_pickle=True).item()
 import albumentations as albu
 
 # This gives the mapping between labels and their class id
-LABEL_TO_ID = {'Seizure':0, 'LPD':1, 'GPD':2, 'LRDA':3, 'GRDA':4, 'Other':5}
+LABEL_TO_ID = {"Seizure":0, "LPD":1, "GPD":2, "LRDA":3, "GRDA":4, "Other":5}
 ID_TO_LABEL = {x:y for y,x in LABEL_TO_ID.items()}
 
 class DataGenerator(tf.keras.utils.Sequence):
-    'Generates data for Keras'
-    def __init__(self, data, batch_size=32, shuffle=False, augment=False, mode='train',
+    "Generates data for Keras"
+    def __init__(self, data, batch_size=32, shuffle=False, augment=False, mode="train",
                  specs = spectrograms, eeg_specs = all_eegs):
 
         self.data = data
@@ -108,35 +108,35 @@ class DataGenerator(tf.keras.utils.Sequence):
         self.on_epoch_end()
 
     def __len__(self):
-        'Denotes the number of batches per epoch'
+        "Denotes the number of batches per epoch"
         ct = int( np.ceil( len(self.data) / self.batch_size ) )
         return ct
 
     def __getitem__(self, index):
-        'Generate one batch of data'
+        "Generate one batch of data"
         indexes = self.indexes[index*self.batch_size:(index+1)*self.batch_size]
         X, y = self.__data_generation(indexes)
         if self.augment: X = self.__augment_batch(X)
         return X, y
 
     def on_epoch_end(self):
-        'Updates indexes after each epoch'
+        "Updates indexes after each epoch"
         self.indexes = np.arange( len(self.data) )
         if self.shuffle: np.random.shuffle(self.indexes)
 
     def __data_generation(self, indexes):
-        'Generates data containing batch_size samples'
+        "Generates data containing batch_size samples"
 
-        X = np.zeros((len(indexes),128,256,8),dtype='float32')
-        y = np.zeros((len(indexes),6),dtype='float32')
-        img = np.ones((128,256),dtype='float32')
+        X = np.zeros((len(indexes),128,256,8),dtype="float32")
+        y = np.zeros((len(indexes),6),dtype="float32")
+        img = np.ones((128,256),dtype="float32")
 
         for j,i in enumerate(indexes):
             row = self.data.iloc[i]
-            if self.mode=='test':
+            if self.mode=="test":
                 r = 0
             else:
-                r = int( (row['min'] + row['max'])//4 )
+                r = int( (row["min"] + row["max"])//4 )
 
             for k in range(4):
                 # EXTRACT 300 ROWS OF SPECTROGRAM
@@ -160,7 +160,7 @@ class DataGenerator(tf.keras.utils.Sequence):
             img = self.eeg_specs[row.eeg_id]
             X[j,:,:,4:] = img
 
-            if self.mode!='test':
+            if self.mode!="test":
                 y[j,] = row[TARGETS]
 
         return X,y
@@ -170,7 +170,7 @@ class DataGenerator(tf.keras.utils.Sequence):
             albu.HorizontalFlip(p=0.5),
             #albu.CoarseDropout(max_holes=8,max_height=32,max_width=32,fill_value=0,p=0.5),
         ])
-        return composition(image=img)['image']
+        return composition(image=img)["image"]
 
     def __augment_batch(self, img_batch):
         for i in range(img_batch.shape[0]):
@@ -190,7 +190,7 @@ def build_model():
 
     inp = tf.keras.Input(shape=(128,256,8))
     base_model = efn.EfficientNetB0(include_top=False, weights=None, input_shape=None)
-    base_model.load_weights('/kaggle/input/tf-efficientnet-imagenet-weights/efficientnet-b0_weights_tf_dim_ordering_tf_kernels_autoaugment_notop.h5')
+    base_model.load_weights("/kaggle/input/tf-efficientnet-imagenet-weights/efficientnet-b0_weights_tf_dim_ordering_tf_kernels_autoaugment_notop.h5")
 
     # RESHAPE INPUT 128x256x8 => 512x512x3 MONOTONE IMAGE
     # KAGGLE SPECTROGRAMS
@@ -209,7 +209,7 @@ def build_model():
     # OUTPUT
     x = base_model(x)
     x = tf.keras.layers.GlobalAveragePooling2D()(x)
-    x = tf.keras.layers.Dense(6,activation='softmax', dtype='float32')(x)
+    x = tf.keras.layers.Dense(6,activation="softmax", dtype="float32")(x)
 
     # COMPILE MODEL
     model = tf.keras.Model(inputs=inp, outputs=x)
@@ -233,14 +233,14 @@ all_true = []
 gkf = GroupKFold(n_splits=5)
 for i, (train_index, valid_index) in enumerate(gkf.split(train, train.target, train.patient_id)):
 
-    print('#'*25)
-    print(f'### Fold {i+1}')
+    print("#"*25)
+    print(f"### Fold {i+1}")
 
     train_gen = DataGenerator(train.iloc[train_index], shuffle=True, batch_size=32, augment=False)
-    valid_gen = DataGenerator(train.iloc[valid_index], shuffle=False, batch_size=64, mode='valid')
+    valid_gen = DataGenerator(train.iloc[valid_index], shuffle=False, batch_size=64, mode="valid")
 
-    print(f'### train size {len(train_index)}, valid size {len(valid_index)}')
-    print('#'*25)
+    print(f"### train size {len(train_index)}, valid size {len(valid_index)}")
+    print("#"*25)
 
     K.clear_session()
     with strategy.scope():
@@ -249,9 +249,9 @@ for i, (train_index, valid_index) in enumerate(gkf.split(train, train.target, tr
         model.fit(train_gen, verbose=1,
               validation_data = valid_gen,
               epochs=EPOCHS, callbacks = [LR])
-        model.save_weights(f'EffNet_v{VER}_f{i}.h5')
+        model.save_weights(f"EffNet_v{VER}_f{i}.h5")
     else:
-        model.load_weights(f'{LOAD_MODELS_FROM}EffNet_v{VER}_f{i}.h5')
+        model.load_weights(f"{LOAD_MODELS_FROM}EffNet_v{VER}_f{i}.h5")
 
     oof = model.predict(valid_gen, verbose=1)
     all_oof.append(oof)
@@ -266,67 +266,67 @@ all_true = np.concatenate(all_true)
 
 # Compute the CV score
 import sys
-sys.path.append('/kaggle/input/kaggle-kl-div')
+sys.path.append("/kaggle/input/kaggle-kl-div")
 from kaggle_kl_div import score
 
 oof = pd.DataFrame(all_oof.copy())
-oof['id'] = np.arange(len(oof))
+oof["id"] = np.arange(len(oof))
 
 true = pd.DataFrame(all_true.copy())
-true['id'] = np.arange(len(true))
+true["id"] = np.arange(len(true))
 
-cv = score(solution=true, submission=oof, row_id_column_name='id')
-print('CV Score KL-Div for EfficientNetB2 =',cv)
+cv = score(solution=true, submission=oof, row_id_column_name="id")
+print("CV Score KL-Div for EfficientNetB2 =",cv)
 
 
 
 # 4. Test Model ---------------------------------------------------------------
 # Infer test and crate submission
 del all_eegs, spectrograms; gc.collect()
-test = pd.read_csv('/kaggle/input/hms-harmful-brain-activity-classification/test.csv')
-print('Test shape',test.shape)
+test = pd.read_csv("/kaggle/input/hms-harmful-brain-activity-classification/test.csv")
+print("Test shape",test.shape)
 test.head()
 
 
 # READ ALL SPECTROGRAMS
-PATH2 = '/kaggle/input/hms-harmful-brain-activity-classification/test_spectrograms/'
+PATH2 = "/kaggle/input/hms-harmful-brain-activity-classification/test_spectrograms/"
 files2 = os.listdir(PATH2)
-print(f'There are {len(files2)} test spectrogram parquets')
+print(f"There are {len(files2)} test spectrogram parquets")
 
 spectrograms2 = {}
 for i,f in enumerate(files2):
-    if i%100==0: print(i,', ',end='')
-    tmp = pd.read_parquet(f'{PATH2}{f}')
-    name = int(f.split('.')[0])
+    if i%100==0: print(i,", ",end="")
+    tmp = pd.read_parquet(f"{PATH2}{f}")
+    name = int(f.split(".")[0])
     spectrograms2[name] = tmp.iloc[:,1:].values
 
 # RENAME FOR DATALOADER
-test = test.rename({'spectrogram_id':'spec_id'},axis=1)
+test = test.rename({"spectrogram_id":"spec_id"},axis=1)
 
 
 import pywt, librosa
 
 USE_WAVELET = None
 
-NAMES = ['LL','LP','RP','RR']
+NAMES = ["LL","LP","RP","RR"]
 
-FEATS = [['Fp1','F7','T3','T5','O1'],
-         ['Fp1','F3','C3','P3','O1'],
-         ['Fp2','F8','T4','T6','O2'],
-         ['Fp2','F4','C4','P4','O2']]
+FEATS = [["Fp1","F7","T3","T5","O1"],
+         ["Fp1","F3","C3","P3","O1"],
+         ["Fp2","F8","T4","T6","O2"],
+         ["Fp2","F4","C4","P4","O2"]]
 
 # DENOISE FUNCTION
 def maddest(d, axis=None):
     return np.mean(np.absolute(d - np.mean(d, axis)), axis)
 
-def denoise(x, wavelet='haar', level=1):
+def denoise(x, wavelet="haar", level=1):
     coeff = pywt.wavedec(x, wavelet, mode="per")
     sigma = (1/0.6745) * maddest(coeff[-level])
 
     uthresh = sigma * np.sqrt(2*np.log(len(x)))
-    coeff[1:] = (pywt.threshold(i, value=uthresh, mode='hard') for i in coeff[1:])
+    coeff[1:] = (pywt.threshold(i, value=uthresh, mode="hard") for i in coeff[1:])
 
-    ret=pywt.waverec(coeff, wavelet, mode='per')
+    ret=pywt.waverec(coeff, wavelet, mode="per")
 
     return ret
 
@@ -338,7 +338,7 @@ def spectrogram_from_eeg(parquet_path, display=False):
     eeg = eeg.iloc[middle:middle+10_000]
 
     # VARIABLE TO HOLD SPECTROGRAM
-    img = np.zeros((128,256,4),dtype='float32')
+    img = np.zeros((128,256,4),dtype="float32")
 
     if display: plt.figure(figsize=(10,7))
     signals = []
@@ -377,8 +377,8 @@ def spectrogram_from_eeg(parquet_path, display=False):
 
         if display:
             plt.subplot(2,2,k+1)
-            plt.imshow(img[:,:,k],aspect='auto',origin='lower')
-            plt.title(f'EEG {eeg_id} - Spectrogram {NAMES[k]}')
+            plt.imshow(img[:,:,k],aspect="auto",origin="lower")
+            plt.title(f"EEG {eeg_id} - Spectrogram {NAMES[k]}")
 
     if display:
         plt.show()
@@ -389,50 +389,50 @@ def spectrogram_from_eeg(parquet_path, display=False):
             plt.plot(range(10_000),signals[k]+offset,label=NAMES[3-k])
             offset += signals[3-k].max()
         plt.legend()
-        plt.title(f'EEG {eeg_id} Signals')
+        plt.title(f"EEG {eeg_id} Signals")
         plt.show()
-        print(); print('#'*25); print()
+        print(); print("#"*25); print()
 
     return img
 
 
 # READ ALL EEG SPECTROGRAMS
-PATH2 = '/kaggle/input/hms-harmful-brain-activity-classification/test_eegs/'
+PATH2 = "/kaggle/input/hms-harmful-brain-activity-classification/test_eegs/"
 DISPLAY = 1
 EEG_IDS2 = test.eeg_id.unique()
 all_eegs2 = {}
 
-print('Converting Test EEG to Spectrograms...'); print()
+print("Converting Test EEG to Spectrograms..."); print()
 for i,eeg_id in enumerate(EEG_IDS2):
 
     # CREATE SPECTROGRAM FROM EEG PARQUET
-    img = spectrogram_from_eeg(f'{PATH2}{eeg_id}.parquet', i<DISPLAY)
+    img = spectrogram_from_eeg(f"{PATH2}{eeg_id}.parquet", i<DISPLAY)
     all_eegs2[eeg_id] = img
 
 
 # INFER EFFICIENTNET ON TEST
 preds = []
 model = build_model()
-test_gen = DataGenerator(test, shuffle=False, batch_size=64, mode='test',
+test_gen = DataGenerator(test, shuffle=False, batch_size=64, mode="test",
                          specs = spectrograms2, eeg_specs = all_eegs2)
 
 for i in range(5):
-    print(f'Fold {i+1}')
+    print(f"Fold {i+1}")
     if LOAD_MODELS_FROM:
-        model.load_weights(f'{LOAD_MODELS_FROM}EffNet_v{VER}_f{i}.h5')
+        model.load_weights(f"{LOAD_MODELS_FROM}EffNet_v{VER}_f{i}.h5")
     else:
-        model.load_weights(f'EffNet_v{VER}_f{i}.h5')
+        model.load_weights(f"EffNet_v{VER}_f{i}.h5")
     pred = model.predict(test_gen, verbose=1)
     preds.append(pred)
 pred = np.mean(preds,axis=0)
 print()
-print('Test preds shape',pred.shape)
+print("Test preds shape",pred.shape)
 
 
-sub = pd.DataFrame({'eeg_id':test.eeg_id.values})
+sub = pd.DataFrame({"eeg_id":test.eeg_id.values})
 sub[TARGETS] = pred
-sub.to_csv('submission.csv',index=False)
-print('Submissionn shape',sub.shape)
+sub.to_csv("submission.csv",index=False)
+print("Submissionn shape",sub.shape)
 sub.head()
 
 
