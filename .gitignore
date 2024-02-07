@@ -171,3 +171,9 @@ train_eegs/
 train_spectrograms/
 ## Personal Sandbox
 personal_sandbox/
+
+# Precompile files
+EEG_Spectrograms/
+specs.npy
+train.pqt
+eeg_specs.npy
