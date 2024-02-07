@@ -85,18 +85,24 @@ class DataGenerator(Dataset):
 
     # TODO: Should this be done in the training loop
     # as opposed to the DataLoader?
-    # TODO: Need to make it vectorised
-    def transform(self, img):
+    @staticmethod
+    def transform(img):
+        """Can be a single image (width, height)
+        But can also be a (width, height, channels)
+        """
         # LOG TRANSFORM SPECTROGRAM
-        # Why clip and log?
-        img = np.clip(img,np.exp(-4),np.exp(8))
+        img = np.clip(img, np.exp(-4),np.exp(8))
         img = np.log(img)
 
+        # For computing the mean and std
+        num_channels = img.shape[-1] if len(img.shape) == 3 else 1
+        reshaped_image = img.reshape(-1, num_channels)
+
         # STANDARDIZE PER IMAGE
-        ep = 1e-6
-        m = np.nanmean(img.flatten())
-        s = np.nanstd(img.flatten())
-        img = (img-m)/(s+ep)
+        jitter = 1e-6
+        mean_by_channel = np.nanmean(reshaped_image, axis=1)
+        std_by_channel  = np.nanstd (reshaped_image, axis=1)
+        img = (img - mean_by_channel) / (std_by_channel + jitter)
         img = np.nan_to_num(img, nan=0.0)
 
         return img
@@ -116,7 +122,6 @@ class DataGenerator(Dataset):
         y = np.zeros((inferred_batch_size, self.num_targets), dtype="float32")
 
         rows = self.metadata.iloc[idx]
-
 
         # NOTE: Have to do a for loop because the full spectrograms
         # may be different length
