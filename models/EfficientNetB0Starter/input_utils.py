@@ -63,7 +63,6 @@ class DataGenerator(Dataset):
 
         self.transform = transform
 
-        # TODO: This can be inferred from data!
         self.TARGETS = TARGETS
         self.num_targets = len(TARGETS)
 
