@@ -40,6 +40,7 @@ print('TensorFlow version =',tf.__version__)
 
 
 
+# 1. Reading Data --------------------------------------------------------------
 
 def create_non_overlapping_eeg_data(df):
     '''Only use one eeg for each eeg id as test dataset doesn't have overlaps'''
@@ -177,6 +178,7 @@ class DataGenerator(tf.keras.utils.Sequence):
         return img_batch
 
 
+# 2. Build Model ---------------------------------------------------------------
 
 # Build EfficientNet Model
 
@@ -219,6 +221,7 @@ def build_model():
     return model
 
 
+# 3. Train Model ---------------------------------------------------------------
 ## Train Model
 
 from sklearn.model_selection import KFold, GroupKFold
@@ -276,6 +279,8 @@ cv = score(solution=true, submission=oof, row_id_column_name='id')
 print('CV Score KL-Div for EfficientNetB2 =',cv)
 
 
+
+# 4. Test Model ---------------------------------------------------------------
 # Infer test and crate submission
 del all_eegs, spectrograms; gc.collect()
 test = pd.read_csv('/kaggle/input/hms-harmful-brain-activity-classification/test.csv')
