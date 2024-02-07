@@ -44,13 +44,10 @@ print("TensorFlow version =",tf.__version__)
 #     print("Using full precision")
 
 
-from input_utils import create_modified_eeg_metadata_df, DataGenerator
+from input_utils import create_modified_eeg_metadata_df, PreloadedDataset
 from constants import TARGETS
 
 # 1. Reading Data --------------------------------------------------------------
-
-
-
 df = pd.read_csv(TRAIN_CSV_DIR)
 eeg_metadata_df = create_modified_eeg_metadata_df(df)
 print("Train shape:", df.shape )
@@ -120,9 +117,9 @@ for i, (train_index, valid_index) in enumerate(gkf.split(eeg_metadata_df, eeg_me
     print("#"*25)
     print(f"### Fold {i+1}")
 
-    train_gen = DataGenerator(eeg_metadata_df.iloc[train_index], spectrograms, all_eegs,
+    train_gen = PreloadedDataset(eeg_metadata_df.iloc[train_index], spectrograms, all_eegs,
                               shuffle=True, batch_size=32, augment=False)
-    valid_gen = DataGenerator(eeg_metadata_df.iloc[valid_index], spectrograms, all_eegs,
+    valid_gen = PreloadedDataset(eeg_metadata_df.iloc[valid_index], spectrograms, all_eegs,
                               shuffle=False, batch_size=64, mode="valid")
 
     print(f"### train size {len(train_index)}, valid size {len(valid_index)}")
@@ -300,7 +297,7 @@ for i,eeg_id in enumerate(EEG_IDS2):
 preds = []
 model = build_model()
 #TODO: Should have a different DataGenerator for test
-test_gen = DataGenerator(test, spectrograms2, all_eegs2,
+test_gen = PreloadedDataset(test, spectrograms2, all_eegs2,
                          shuffle=False, batch_size=64, mode="test")
 
 for i in range(5):
