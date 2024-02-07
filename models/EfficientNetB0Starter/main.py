@@ -2,7 +2,7 @@ VER = 5
 
 # Contains all of the eegs together in one file - faster
 # TODO: Local computers might not have enough ram, so consider one which processes as it goes.
-TRAIN_CSV_DIR = "/kaggle/input/hms-harmful-brain-activity-classification/train.csv"
+TRAIN_METADATA_DIR = "/kaggle/input/hms-harmful-brain-activity-classification/train.csv"
 KAGGLE_SPECTROGRAM_DIR = "/kaggle/input/brain-spectrograms/specs.npy"
 EEG_SPECTROGRAM_DIR = "/kaggle/input/brain-eeg-spectrograms/eeg_specs.npy"
 
@@ -48,13 +48,12 @@ from input_utils import create_modified_eeg_metadata_df, PreloadedDataset
 from constants import TARGETS
 
 # 1. Reading Data --------------------------------------------------------------
-df = pd.read_csv(TRAIN_CSV_DIR)
-eeg_metadata_df = create_modified_eeg_metadata_df(df)
-print("Train shape:", df.shape )
-print("Targets", list(TARGETS))
+# Ignore the sub_ids
+eeg_metadata_df = pd.read_csv(TRAIN_METADATA_DIR)
+eeg_metadata_df = create_modified_eeg_metadata_df(eeg_metadata_df)
 
-# Read precomputed spectrograms (from kaggle and eeg) that are all placed in one file
-# TODO: Download these files
+# Read precomputed spectrograms (from kaggle and eeg)
+# that are all placed in one dictionary
 spectrograms = np.load(KAGGLE_SPECTROGRAM_DIR, allow_pickle=True).item()
 all_eegs = np.load(EEG_SPECTROGRAM_DIR,allow_pickle=True).item()
 
@@ -117,6 +116,8 @@ for i, (train_index, valid_index) in enumerate(gkf.split(eeg_metadata_df, eeg_me
     print("#"*25)
     print(f"### Fold {i+1}")
 
+    # TODO: Pretty sure that PyTorch has some cross validation thing
+    # So we only need one dataset.
     train_gen = PreloadedDataset(eeg_metadata_df.iloc[train_index], spectrograms, all_eegs,
                               shuffle=True, batch_size=32, augment=False)
     valid_gen = PreloadedDataset(eeg_metadata_df.iloc[valid_index], spectrograms, all_eegs,
