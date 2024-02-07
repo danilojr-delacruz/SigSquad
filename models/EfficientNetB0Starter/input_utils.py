@@ -85,6 +85,7 @@ class DataGenerator(Dataset):
 
     # TODO: Should this be done in the training loop
     # as opposed to the DataLoader?
+    # TODO: Need to make it vectorised
     def transform(self, img):
         # LOG TRANSFORM SPECTROGRAM
         # Why clip and log?
@@ -100,43 +101,64 @@ class DataGenerator(Dataset):
 
         return img
 
+    # TODO: Need to test this.
     def __getitem__(self, idx):
         "Generates data containing batch_size samples"
-
         # idx will contain the indices for our batch
+        inferred_batch_size = len(idx)
+
         # Shape is (batch_size, width, height, num_channels)
         # TODO: PyTorch uses channels first.
         # Keep like this for downstream compatibility. But change to faster one.
         # (Between channel first and last)
-        X = np.zeros((self.batch_size, self.img_width, self.img_height, self.num_spectrograms), dtype="float32")
-        y = np.zeros((self.batch_size, self.num_targets), dtype="float32")
 
-        for j,i in enumerate(idx):
-            row = self.metadata.iloc[i]
+        X = np.zeros((inferred_batch_size, self.img_width, self.img_height, self.num_spectrograms), dtype="float32")
+        y = np.zeros((inferred_batch_size, self.num_targets), dtype="float32")
+
+        rows = self.metadata.iloc[idx]
+
+
+        # NOTE: Have to do a for loop because the full spectrograms
+        # may be different length
+
+        for i in range(inferred_batch_size):
+            row = rows.iloc[i]
             # TODO: Why are they looking at 1/4 of the offset range?
             # To bias more towards the start?
             # Surely you should just use min_offset_seconds.
-            r = int( (row["min_offset_seconds"] + row["max_offset_seconds"])//4 )
+            # TODO: Maybe divided by 2 to get in terms of seconds? That would be wrong
+            offset = (row["min_offset_seconds"] + row["max_offset_seconds"]) // 4
 
-            for k in range(4):
-                # EXTRACT 300 ROWS OF SPECTROGRAM
-                # Spectrogram sampled every 2 seconds soe 300 rows is 600 seconds
-                # I.e. 10 minutes
-                # NOTE: In actual parquet file, the first column is time.
-                # But precomputed specs does not have a time column.
-                kaggle_spectrogram = self.specs[row.spec_id][r:r+300,k*100:(k+1)*100].T
-                kaggle_spectrogram = self.transform(kaggle_spectrogram)
+            spectrogram_id = row.spec_id
+            eeg_spectrogram_id = row.eeg_id
 
-                # CROP TO 256 TIME STEPS
-                # Why 256?
-                # Note zero padded by 14 on each side to get 128
-                X[j,14:-14,:,k] = kaggle_spectrogram[:,22:-22] / 2.0
+            # EXTRACT 300 ROWS OF SPECTROGRAM
+            # Spectrogram sampled every 2 seconds soe 300 rows is 600 seconds
+            # I.e. 10 minutes
+            # NOTE: In actual parquet file, the first column is time.
+            # But precomputed specs does not have a time column.
+            # Shape progression
+            # (300, 100 * 4)
+            # (300, 4, 100)
+            # (300, 100, 4)
+            # (100, 300, 4)
+            kaggle_spectrograms = \
+                self.specs[spectrogram_id][offset: offset+300] \
+                    .reshape(300, 4, 100) \
+                    .swapaxes(1, 2) \
+                    .swapaxes(0, 1)
+            # Shape: (num_timesteps, num_frequencies, num_spectrograms)
+            kaggle_spectrograms = self.transform(kaggle_spectrograms)
+
+            # CROP TO 256 TIME STEPS with 22:-22
+            # Pad to 128 frequencies with 14:-14
+            # TODO: Why divide value by 2?
+            X[i, 14:-14, ...] = kaggle_spectrograms[..., 22:-22, :] / 2.0
 
             # EEG SPECTROGRAMS, already processed?
-            eeg_spectrograms = self.eeg_specs[row.eeg_id]
-            X[j,:,:,4:] = eeg_spectrograms
+            eeg_spectrograms = self.eeg_specs[eeg_spectrogram_id]
+            X[i, ..., 4:] = eeg_spectrograms
 
+            y[i] = row[TARGETS]
 
-            y[j,] = row[self.TARGETS]
-
-        return X,y
+        return X, y
