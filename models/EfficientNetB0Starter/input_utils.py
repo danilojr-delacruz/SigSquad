@@ -61,7 +61,8 @@ class DataGenerator(Dataset):
         # TODO: Do we need to worry about the mode? Doesn't PL handle that?
         self.mode = mode
 
-        self.transform = transform
+        if transform is not None:
+            self.transform = transform
 
         self.TARGETS = TARGETS
         self.num_targets = len(TARGETS)
@@ -100,8 +101,8 @@ class DataGenerator(Dataset):
 
         # STANDARDIZE PER IMAGE
         jitter = 1e-6
-        mean_by_channel = np.nanmean(reshaped_image, axis=1)
-        std_by_channel  = np.nanstd (reshaped_image, axis=1)
+        mean_by_channel = np.nanmean(reshaped_image, axis=0)
+        std_by_channel  = np.nanstd (reshaped_image, axis=0)
         img = (img - mean_by_channel) / (std_by_channel + jitter)
         img = np.nan_to_num(img, nan=0.0)
 
@@ -111,6 +112,7 @@ class DataGenerator(Dataset):
     def __getitem__(self, idx):
         "Generates data containing batch_size samples"
         # idx will contain the indices for our batch
+        # TODO: Check if we will ever use integer index as opposed to a list
         inferred_batch_size = len(idx)
 
         # Shape is (batch_size, width, height, num_channels)
@@ -132,7 +134,7 @@ class DataGenerator(Dataset):
             # To bias more towards the start?
             # Surely you should just use min_offset_seconds.
             # TODO: Maybe divided by 2 to get in terms of seconds? That would be wrong
-            offset = (row["min_offset_seconds"] + row["max_offset_seconds"]) // 4
+            offset = int((row["min_offset_seconds"] + row["max_offset_seconds"]) // 4)
 
             spectrogram_id = row.spec_id
             eeg_spectrogram_id = row.eeg_id
@@ -158,11 +160,11 @@ class DataGenerator(Dataset):
             # CROP TO 256 TIME STEPS with 22:-22
             # Pad to 128 frequencies with 14:-14
             # TODO: Why divide value by 2?
-            X[i, 14:-14, ...] = kaggle_spectrograms[..., 22:-22, :] / 2.0
+            X[i, 14:-14, :, :4] = kaggle_spectrograms[..., 22:-22, :] / 2.0
 
             # EEG SPECTROGRAMS, already processed?
             eeg_spectrograms = self.eeg_specs[eeg_spectrogram_id]
-            X[i, ..., 4:] = eeg_spectrograms
+            X[i, :, :, 4:] = eeg_spectrograms
 
             y[i] = row[TARGETS]
 
