@@ -4,6 +4,8 @@ from torch.utils.data import Dataset
 
 from constants import TARGETS
 
+# TODO: Add some tests to check these work.
+
 # TODO: Why is this not in its own file? I guess it is computed very quickly.
 def create_modified_eeg_metadata_df(eeg_metadata_df):
     """Create a new metadata file which integrates all sub_eeg_id."""
