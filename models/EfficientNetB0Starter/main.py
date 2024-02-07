@@ -298,6 +298,7 @@ for i,eeg_id in enumerate(EEG_IDS2):
 # INFER EFFICIENTNET ON TEST
 preds = []
 model = build_model()
+#TODO: Should have a different DataGenerator for test
 test_gen = DataGenerator(test, spectrograms2, all_eegs2,
                          shuffle=False, batch_size=64, mode="test")
 

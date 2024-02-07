@@ -106,9 +106,6 @@ class DataGenerator(Dataset):
 
         for j,i in enumerate(idx):
             row = self.metadata.iloc[i]
-            # TODO: Why use this?
-            # if self.mode=="test":
-            #     r = 0
             r = int( (row["min"] + row["max"])//4 )
 
             for k in range(4):
@@ -122,7 +119,7 @@ class DataGenerator(Dataset):
             img = self.eeg_specs[row.eeg_id]
             X[j,:,:,4:] = img
 
-            if self.mode!="test":
-                y[j,] = row[self.TARGETS]
+
+            y[j,] = row[self.TARGETS]
 
         return X,y
