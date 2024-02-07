@@ -1,3 +1,16 @@
+VER = 5
+
+# Contains all of the eegs together in one file - faster
+TRAIN_CSV_DIR = '/kaggle/input/hms-harmful-brain-activity-classification/train.csv'
+KAGGLE_SPECTROGRAM_DIR = '/kaggle/input/brain-spectrograms/specs.npy'
+EEG_SPECTROGRAM_DIR = '/kaggle/input/brain-eeg-spectrograms/eeg_specs.npy'
+
+# # IF THIS EQUALS NONE, THEN WE TRAIN NEW MODELS
+# # IF THIS EQUALS DISK PATH, THEN WE LOAD PREVIOUSLY TRAINED MODELS
+LOAD_MODELS_FROM = '/kaggle/input/brain-efficientnet-models-v3-v4-v5/'
+USE_KAGGLE_SPECTROGRAMS = True
+USE_EEG_SPECTROGRAMS = True
+
 
 # Initialise 2xT4 GPUs
 import os, gc
@@ -7,6 +20,7 @@ import pandas as pd, numpy as np
 import matplotlib.pyplot as plt
 print('TensorFlow version =',tf.__version__)
 
+# TODO: What to do about GPUs and Mixed Precision?
 # # USE MULTIPLE GPUS
 # gpus = tf.config.list_physical_devices('GPU')
 # if len(gpus)<=1:
@@ -16,97 +30,67 @@ print('TensorFlow version =',tf.__version__)
 #     strategy = tf.distribute.MirroredStrategy()
 #     print(f'Using {len(gpus)} GPUs')
 
-VER = 5
-
-# IF THIS EQUALS NONE, THEN WE TRAIN NEW MODELS
-# IF THIS EQUALS DISK PATH, THEN WE LOAD PREVIOUSLY TRAINED MODELS
-LOAD_MODELS_FROM = '/kaggle/input/brain-efficientnet-models-v3-v4-v5/'
-
-USE_KAGGLE_SPECTROGRAMS = True
-USE_EEG_SPECTROGRAMS = True
-
-# USE MIXED PRECISION
-MIX = True
-if MIX:
-    tf.config.optimizer.set_experimental_options({"auto_mixed_precision": True})
-    print('Mixed precision enabled')
-else:
-    print('Using full precision')
+# # USE MIXED PRECISION
+# MIX = True
+# if MIX:
+#     tf.config.optimizer.set_experimental_options({'auto_mixed_precision': True})
+#     print('Mixed precision enabled')
+# else:
+#     print('Using full precision')
 
 
-# Load train data
-df = pd.read_csv('/kaggle/input/hms-harmful-brain-activity-classification/train.csv')
+
+
+def create_non_overlapping_eeg_data(df):
+    '''Only use one eeg for each eeg id as test dataset doesn't have overlaps'''
+
+    # Create non-overlapping eeg id data
+    train = df.groupby('eeg_id')[['spectrogram_id','spectrogram_label_offset_seconds']].agg(
+        {'spectrogram_id':'first','spectrogram_label_offset_seconds':'min'})
+    train.columns = ['spec_id','min']
+
+    tmp = df.groupby('eeg_id')[['spectrogram_id','spectrogram_label_offset_seconds']].agg(
+        {'spectrogram_label_offset_seconds':'max'})
+    train['max'] = tmp
+
+    tmp = df.groupby('eeg_id')[['patient_id']].agg('first')
+    train['patient_id'] = tmp
+
+    tmp = df.groupby('eeg_id')[TARGETS].agg('sum')
+    for t in TARGETS:
+        train[t] = tmp[t].values
+
+    y_data = train[TARGETS].values
+    y_data = y_data / y_data.sum(axis=1,keepdims=True)
+    train[TARGETS] = y_data
+
+    tmp = df.groupby('eeg_id')[['expert_consensus']].agg('first')
+    train['target'] = tmp
+
+    train = train.reset_index()
+    print('Train non-overlapping eeg_id shape:', train.shape )
+    train.head()
+
+    return train
+
+df = pd.read_csv(TRAIN_CSV_DIR)
+train = create_non_overlapping_eeg_data(df)
 TARGETS = df.columns[-6:]
 print('Train shape:', df.shape )
 print('Targets', list(TARGETS))
-df.head()
 
-
-# Create non-overlapping eeg id data
-train = df.groupby('eeg_id')[['spectrogram_id','spectrogram_label_offset_seconds']].agg(
-    {'spectrogram_id':'first','spectrogram_label_offset_seconds':'min'})
-train.columns = ['spec_id','min']
-
-tmp = df.groupby('eeg_id')[['spectrogram_id','spectrogram_label_offset_seconds']].agg(
-    {'spectrogram_label_offset_seconds':'max'})
-train['max'] = tmp
-
-tmp = df.groupby('eeg_id')[['patient_id']].agg('first')
-train['patient_id'] = tmp
-
-tmp = df.groupby('eeg_id')[TARGETS].agg('sum')
-for t in TARGETS:
-    train[t] = tmp[t].values
-
-y_data = train[TARGETS].values
-y_data = y_data / y_data.sum(axis=1,keepdims=True)
-train[TARGETS] = y_data
-
-tmp = df.groupby('eeg_id')[['expert_consensus']].agg('first')
-train['target'] = tmp
-
-train = train.reset_index()
-print('Train non-overlapp eeg_id shape:', train.shape )
-train.head()
-
-
-
-# Read train spectrograms
-READ_SPEC_FILES = False
-
-# READ ALL SPECTROGRAMS
-PATH = '/kaggle/input/hms-harmful-brain-activity-classification/train_spectrograms/'
-files = os.listdir(PATH)
-print(f'There are {len(files)} spectrogram parquets')
-
-if READ_SPEC_FILES:
-    spectrograms = {}
-    for i,f in enumerate(files):
-        if i%100==0: print(i,', ',end='')
-        tmp = pd.read_parquet(f'{PATH}{f}')
-        name = int(f.split('.')[0])
-        spectrograms[name] = tmp.iloc[:,1:].values
-else:
-    spectrograms = np.load('/kaggle/input/brain-spectrograms/specs.npy',allow_pickle=True).item()
-
-
-# Read EEG Spectrograms
-READ_EEG_SPEC_FILES = False
-
-if READ_EEG_SPEC_FILES:
-    all_eegs = {}
-    for i,e in enumerate(train.eeg_id.values):
-        if i%100==0: print(i,', ',end='')
-        x = np.load(f'/kaggle/input/brain-eeg-spectrograms/EEG_Spectrograms/{e}.npy')
-        all_eegs[e] = x
-else:
-    all_eegs = np.load('/kaggle/input/brain-eeg-spectrograms/eeg_specs.npy',allow_pickle=True).item()
+# Read precomputed spectrograms (from kaggle and eeg) that are all placed in one file
+# TODO: Download these files
+spectrograms = np.load(KAGGLE_SPECTROGRAM_DIR, allow_pickle=True).item()
+all_eegs = np.load(EEG_SPECTROGRAM_DIR,allow_pickle=True).item()
 
 
 # Train Dataloader
 import albumentations as albu
-TARS = {'Seizure':0, 'LPD':1, 'GPD':2, 'LRDA':3, 'GRDA':4, 'Other':5}
-TARS2 = {x:y for y,x in TARS.items()}
+
+# This gives the mapping between labels and their class id
+LABEL_TO_ID = {'Seizure':0, 'LPD':1, 'GPD':2, 'LRDA':3, 'GRDA':4, 'Other':5}
+ID_TO_LABEL = {x:y for y,x in LABEL_TO_ID.items()}
 
 class DataGenerator(tf.keras.utils.Sequence):
     'Generates data for Keras'
