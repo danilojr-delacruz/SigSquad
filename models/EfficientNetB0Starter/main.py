@@ -1,6 +1,7 @@
 VER = 5
 
 # Contains all of the eegs together in one file - faster
+# TODO: Local computers might not have enough ram, so consider one which processes as it goes.
 TRAIN_CSV_DIR = "/kaggle/input/hms-harmful-brain-activity-classification/train.csv"
 KAGGLE_SPECTROGRAM_DIR = "/kaggle/input/brain-spectrograms/specs.npy"
 EEG_SPECTROGRAM_DIR = "/kaggle/input/brain-eeg-spectrograms/eeg_specs.npy"

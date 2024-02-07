@@ -66,7 +66,14 @@ class DataGenerator(Dataset):
         self.TARGETS = TARGETS
         self.num_targets = len(TARGETS)
 
+        # TODO: Why 128 x 256?
+        # My guess is that this is a standard size for an image
+        # And we are using a standard Architecture which probably assumes 128x256
+
+        # There are 100 frequencies, pad either side with 0s to get 128
         self.img_width  = 128
+        # There are 300 timesteps (each 2 seconds) and crop by 22 symmetrically
+        # to get 256
         self.img_height = 256
 
         # There are 4 types: Left and Right for Parasagittal and Lateral
@@ -80,6 +87,7 @@ class DataGenerator(Dataset):
     # as opposed to the DataLoader?
     def transform(self, img):
         # LOG TRANSFORM SPECTROGRAM
+        # Why clip and log?
         img = np.clip(img,np.exp(-4),np.exp(8))
         img = np.log(img)
 
@@ -102,22 +110,31 @@ class DataGenerator(Dataset):
         # (Between channel first and last)
         X = np.zeros((self.batch_size, self.img_width, self.img_height, self.num_spectrograms), dtype="float32")
         y = np.zeros((self.batch_size, self.num_targets), dtype="float32")
-        img = np.ones((self.img_width, self.img_height),dtype="float32")
 
         for j,i in enumerate(idx):
             row = self.metadata.iloc[i]
+            # TODO: Why are they looking at 1/4 of the offset range?
+            # To bias more towards the start?
+            # Surely you should just use min_offset_seconds.
             r = int( (row["min_offset_seconds"] + row["max_offset_seconds"])//4 )
 
             for k in range(4):
                 # EXTRACT 300 ROWS OF SPECTROGRAM
-                img = self.transform(self.specs[row.spec_id][r:r+300,k*100:(k+1)*100].T)
+                # Spectrogram sampled every 2 seconds soe 300 rows is 600 seconds
+                # I.e. 10 minutes
+                # NOTE: In actual parquet file, the first column is time.
+                # But precomputed specs does not have a time column.
+                kaggle_spectrogram = self.specs[row.spec_id][r:r+300,k*100:(k+1)*100].T
+                kaggle_spectrogram = self.transform(kaggle_spectrogram)
 
                 # CROP TO 256 TIME STEPS
-                X[j,14:-14,:,k] = img[:,22:-22] / 2.0
+                # Why 256?
+                # Note zero padded by 14 on each side to get 128
+                X[j,14:-14,:,k] = kaggle_spectrogram[:,22:-22] / 2.0
 
-            # EEG SPECTROGRAMS
-            img = self.eeg_specs[row.eeg_id]
-            X[j,:,:,4:] = img
+            # EEG SPECTROGRAMS, already processed?
+            eeg_spectrograms = self.eeg_specs[row.eeg_id]
+            X[j,:,:,4:] = eeg_spectrograms
 
 
             y[j,] = row[self.TARGETS]
