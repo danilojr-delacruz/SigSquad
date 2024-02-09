@@ -74,26 +74,57 @@ def build_model():
 
     # RESHAPE INPUT 128x256x8 => 512x512x3 MONOTONE IMAGE
     # KAGGLE SPECTROGRAMS
+    # Doing a slice in order to keep the shape
+    # (batch_size, frequency, time, spectrograms)
+    # x1 is kaggle spectrograms and x2 is eeg spectrograms
+
+    # Shape is 4 x(batch_size, 128, 256, 1)
     x1 = [inp[:,:,:,i:i+1] for i in range(4)]
+    # Concatenate on axis 1 to get
+    # (batch_size, 128 * 4, 256, 1) = (batch_size, 512, 256, 1)
     x1 = tf.keras.layers.Concatenate(axis=1)(x1)
+
     # EEG SPECTROGRAMS
     x2 = [inp[:,:,:,i+4:i+5] for i in range(4)]
+    # Same, this gets (batch_size, 512, 256, 1)
+    # (batch_size, 128 * 4, 256, 1) = (batch_size, 512, 256, 1)
     x2 = tf.keras.layers.Concatenate(axis=1)(x2)
+
     # MAKE 512X512X3
     if USE_KAGGLE_SPECTROGRAMS & USE_EEG_SPECTROGRAMS:
+        # Put together to get (batch_size, 512, 256*2, 1)
         x = tf.keras.layers.Concatenate(axis=2)([x1,x2])
     elif USE_EEG_SPECTROGRAMS: x = x2
     else: x = x1
+
+    # Same value for all the channels. I.e. gray scale image.
+    # Here channel represents RGB instead.
     x = tf.keras.layers.Concatenate(axis=3)([x,x,x])
+
+    # So you can think of the output as
+    # ---> Axis 2
+    # K1 E1
+    # K2 E2
+    # K3 E3
+    # K4 E4
+    # Vertical is axis 1, horizontal is axis 2.
+    # Axis 3 is the colour, which is just gray scale as equal.
+    # Summary: Input is just all the spectrograms tiled together into one
+    # 512 x 512 image.
+    # TODO: Is there a better way to write this down?
 
     # OUTPUT
     x = base_model(x)
+    # Do pooling, form of convolution
     x = tf.keras.layers.GlobalAveragePooling2D()(x)
+    # Have an MLP and softmax it
     x = tf.keras.layers.Dense(6,activation="softmax", dtype="float32")(x)
 
     # COMPILE MODEL
     model = tf.keras.Model(inputs=inp, outputs=x)
+    # Using Adam with learning rate 1e-3
     opt = tf.keras.optimizers.Adam(learning_rate = 1e-3)
+    # Use KLD. TODO: Why does using cross entropy lead to a difference?
     loss = tf.keras.losses.KLDivergence()
 
     model.compile(loss=loss, optimizer = opt)
