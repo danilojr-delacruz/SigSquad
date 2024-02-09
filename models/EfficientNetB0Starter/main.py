@@ -138,9 +138,13 @@ def build_model():
 from sklearn.model_selection import KFold, GroupKFold
 import tensorflow.keras.backend as K, gc
 
+# Output of the model
 all_oof = []
+# Actual output
 all_true = []
 
+# Grouping by patient id
+# So for a given patient_id all instances of it will either be in the test or training set.
 gkf = GroupKFold(n_splits=5)
 for i, (train_index, valid_index) in enumerate(gkf.split(eeg_metadata_df, eeg_metadata_df.target, eeg_metadata_df.patient_id)):
 
