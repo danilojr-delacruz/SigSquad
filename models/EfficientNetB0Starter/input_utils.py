@@ -1,3 +1,4 @@
+import torch
 import numpy as np
 import pandas as pd
 from torch.utils.data import Dataset
@@ -5,6 +6,46 @@ from torch.utils.data import Dataset
 from constants import TARGETS
 
 # TODO: Add some tests to check these work.
+def create_spectrogram_image_tile(spectrograms):
+    """Assuming shape is tensor of shape
+    (batch_size, height, width, num_spectrograms)
+    Where width=128, height=256, num_spectrograms=8
+    Where the first four is the kaggle spectrograms, followed by EEG
+    """
+
+    batch_size, height, width, num_spectrograms = spectrograms.shape
+    # Assumption, manual override
+    if num_spectrograms != 8:
+        raise Exception(f"Num spectrograms = {num_spectrograms}, expected 8")
+
+    num_spectrograms = 8
+
+    # TODO: Fix later
+    # Either work on channel first everywhere
+    # Or need to adapt for channel last formulation
+    # For now want to get it in the form of
+    # (batch_size, num_spectrograms, height, width)
+    X  = spectrograms.swapaxes(3, 2).swapaxes(2, 1)
+    # Vertically stack into two columns
+    X1 = X.reshape(batch_size, 2, 4*width, height)
+    # Horizontally stack the two (long) columns
+    X2 = torch.concatenate([X1[:, 0, ...], X1[:, 1, ...]], axis=-1)
+    # Repeat along the third dimension
+    X3 = X2.unsqueeze(3).repeat(1, 1, 1, 3).shape
+
+    # So you can think of the output as
+    # ---> Axis 2
+    # K1 E1
+    # K2 E2
+    # K3 E3
+    # K4 E4
+    # Vertical is axis 1, horizontal is axis 2.
+    # Axis 3 is the colour, which is just gray scale as equal.
+    # Summary: Input is just all the spectrograms tiled together into one
+    # 512 x 512 image.
+
+    return X3
+
 
 # TODO: Why is this not in its own file? I guess it is computed very quickly.
 def create_modified_eeg_metadata_df(eeg_metadata_df):
