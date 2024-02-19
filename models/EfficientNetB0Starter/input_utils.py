@@ -210,6 +210,9 @@ class BaseDataset(Dataset):
 
             y[i] = row[TARGETS]
 
+        X = create_spectrogram_image_tile(torch.tensor(X))
+        y = torch.tensor(y)
+
         return X, y
 
     def get_spectrogram(self, spectrogram_id):
