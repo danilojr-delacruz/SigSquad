@@ -20,18 +20,20 @@ def create_spectrogram_image_tile(spectrograms):
 
     num_spectrograms = 8
 
-    # TODO: Fix later
-    # Either work on channel first everywhere
+    # TODO: Either work on channel first everywhere
     # Or need to adapt for channel last formulation
+    #
+    # Initially
+    # (batch_size, height, width, num_spectrograms)
     # For now want to get it in the form of
     # (batch_size, num_spectrograms, height, width)
     X  = spectrograms.swapaxes(3, 2).swapaxes(2, 1)
     # Vertically stack into two columns
-    X1 = X.reshape(batch_size, 2, 4*width, height)
+    X1 = X.reshape(batch_size, 2, 4*height, width)
     # Horizontally stack the two (long) columns
     X2 = torch.concatenate([X1[:, 0, ...], X1[:, 1, ...]], axis=-1)
     # Repeat along the third dimension
-    X3 = X2.unsqueeze(3).repeat(1, 1, 1, 3).shape
+    X3 = X2.unsqueeze(1).repeat(1, 3, 1, 1)
 
     # So you can think of the output as
     # ---> Axis 2
