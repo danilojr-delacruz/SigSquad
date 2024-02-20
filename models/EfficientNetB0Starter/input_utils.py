@@ -194,6 +194,110 @@ class TrainDataset(Dataset):
         return X, y
 
 
+# NOTE: Train and Test set are sufficiently different to warrant different loaders
+class TestDataset(Dataset):
+    """Gives spectrograms."""
+    def __init__(self, metadata, fetcher, transform=None,
+                 shuffle=False, augment=False):
+
+        # Core data
+        self.metadata = metadata
+        self.fetcher  = fetcher
+
+        self.shuffle = shuffle
+        # TODO: Not implemented yet, will need albumentations
+        self.augment = augment
+
+        if transform is not None:
+            self.transform = transform
+
+        self.TARGETS = TARGETS
+        self.num_targets = len(TARGETS)
+
+        # 128 x 256 to get into standard shape for EfficientNet
+
+        # There are 100 frequencies, pad either side with 0s to get 128
+        self.img_height  = 128
+        # There are 300 timesteps (each 2 seconds)
+        # crop by 22 symmetrically to get 256
+        self.img_width   = 256
+
+        # There are 4 types: Left and Right for Parasagittal and Lateral
+        # Then 8 in total because using Kaggle Spectrograms and one inferred from EEG
+        self.num_spectrograms = 8
+
+    def __len__(self):
+        return len(self.metadata)
+
+    # TODO: Should this be done in the training loop
+    # as opposed to the DataLoader?
+    @staticmethod
+    def transform(img):
+        """Can be a single image (width, height)
+        But can also be a (width, height, channels)
+        """
+        # LOG TRANSFORM SPECTROGRAM
+        img = np.clip(img, np.exp(-4),np.exp(8))
+        img = np.log(img)
+
+        # For computing the mean and std
+        num_channels = img.shape[-1] if len(img.shape) == 3 else 1
+        reshaped_image = img.reshape(-1, num_channels)
+
+        # STANDARDIZE PER IMAGE
+        jitter = 1e-6
+        mean_by_channel = np.nanmean(reshaped_image, axis=0)
+        std_by_channel  = np.nanstd (reshaped_image, axis=0)
+        img = (img - mean_by_channel) / (std_by_channel + jitter)
+        img = np.nan_to_num(img, nan=0.0)
+
+        return img
+
+    # TODO: Need to test this.
+    def __getitem__(self, idx):
+        """Assuming idx is an int."""
+
+        # NOTE: PyTorch Layout of (Channel, Height, Width)
+        X = np.zeros((self.num_spectrograms, self.img_height, self.img_width), dtype="float32")
+
+        row = self.metadata.iloc[idx]
+
+        spectrogram_id = row.spec_id
+        eeg_spectrogram_id = row.eeg_id
+
+        # EXTRACT 300 ROWS OF SPECTROGRAM
+        # Spectrogram sampled every 2 seconds so 300 rows is 600 seconds
+        # I.e. 10 minutes
+        # NOTE: In actual parquet file, the first column is time.
+        # But precomputed specs does not have a time column.
+        # Shape progression
+        # (300, 100 * 4)
+        # (300, 4, 100)
+        # (4, 300, 100)
+        # (4, 100, 300)
+        kaggle_spectrograms = \
+            self.fetcher.get_spectrogram(spectrogram_id) \
+                .reshape(300, 4, 100) \
+                .swapaxes(0, 1) \
+                .swapaxes(1, 2)
+        # Shape: (num_spectrograms, num_timesteps, num_frequencies)
+        kaggle_spectrograms = self.transform(kaggle_spectrograms)
+
+        # CROP TO 256 TIME STEPS with 22:-22
+        # Pad to 128 frequencies with 14:-14
+        # TODO: Why divide value by 2?
+        X[:4, 14:-14, :] = kaggle_spectrograms[:, :, 22:-22] / 2.0
+
+        # EEG SPECTROGRAMS, already processed?
+        eeg_spectrograms = self.fetcher.get_eeg_spectrogram(eeg_spectrogram_id)
+        X[4:, ...] = eeg_spectrograms
+
+        # Convert into tensors
+        X = create_spectrogram_image_tile(torch.tensor(X))
+
+        return X
+
+
 class Fetcher:
     """Fetches data"""
     def __init__(self, metadata):
