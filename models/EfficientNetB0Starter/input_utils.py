@@ -1,9 +1,31 @@
 import torch
+import os
 import numpy as np
 import pandas as pd
 from torch.utils.data import Dataset
+from utils import spectrogram_from_eeg
 
 from constants import TARGETS
+
+
+def preload_spectrograms(spectrogram_dir):
+    spectrograms = {}
+    for filename in os.listdir(spectrogram_dir):
+        spectrogram = pd.read_parquet(f"{spectrogram_dir}/{filename}")
+        # Filenames look like 12345.parquet
+        name        = int(filename.split(".")[0])
+        # Remove the first column which represents time
+        spectrograms[name] = spectrogram.iloc[:, 1:].values
+
+    return spectrograms
+
+
+def preload_eeg_spectrograms(metadata, eeg_dir):
+    spectrograms = {}
+    for eeg_id in metadata.eeg_id.unique():
+        img = spectrogram_from_eeg(f"{eeg_dir}/{eeg_id}.parquet")
+        spectrograms[eeg_id] = img
+
 
 # Don't need to precompute as cheap to compute
 def modify_train_metadata(train_metadata):

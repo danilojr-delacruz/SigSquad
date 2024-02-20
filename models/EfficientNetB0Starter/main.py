@@ -43,9 +43,10 @@ import numpy as np
 #     print("Using full precision")
 
 
-from input_utils import modify_train_metadata, PreloadedSpectrogramFetcher, TrainDataset, TestDataset
+from input_utils import modify_train_metadata, PreloadedSpectrogramFetcher, \
+                        TrainDataset, TestDataset, \
+                        preload_spectrograms, preload_eeg_spectrograms
 from model import LitENB0
-from utils import spectrogram_from_eeg
 from constants import TARGETS
 from torch.utils.data import DataLoader
 
@@ -72,22 +73,12 @@ del all_eegs, spectrograms; gc.collect()
 test_metadata = pd.read_csv(TEST_METADATA_DIR)
 
 # READ ALL SPECTROGRAMS
-test_spectrograms = {}
-for filename in os.listdir(TEST_SPECTROGRAM_DIR):
-    spectrogram = pd.read_parquet(f"{TEST_SPECTROGRAM_DIR}/{filename}")
-    # Filenames look like 12345.parquet
-    name        = int(filename.split(".")[0])
-    # Remove the first column which represents time
-    test_spectrograms[name] = spectrogram.iloc[:, 1:].values
+test_spectrograms     = preload_spectrograms(TEST_SPECTROGRAM_DIR)
+test_eeg_spectrograms = preload_eeg_spectrograms(TEST_EEG_DIR)
 
 # READ ALL EEG SPECTROGRAMS AND CONVERT
-test_all_eegs = {}
-for i, eeg_id in enumerate(test_metadata.eeg_id.unique()):
-    # CREATE SPECTROGRAM FROM EEG PARQUET
-    img = spectrogram_from_eeg(f"{TEST_EEG_DIR}/{eeg_id}.parquet")
-    test_all_eegs[eeg_id] = img
 
-fetcher      = PreloadedSpectrogramFetcher(test_spectrograms, test_all_eegs)
+fetcher      = PreloadedSpectrogramFetcher(test_spectrograms, test_eeg_spectrograms)
 test_dataset = TestDataset(test_metadata, shuffle=False)
 test_loader  = DataLoader(test_dataset)
 
