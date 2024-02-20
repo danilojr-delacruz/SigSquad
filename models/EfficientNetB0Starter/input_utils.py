@@ -90,8 +90,7 @@ def create_modified_eeg_metadata_df(eeg_metadata_df):
 class BaseDataset(Dataset):
     """Gives spectrograms."""
     def __init__(self, metadata, transform=None,
-                 batch_size=32, shuffle=False, augment=False,
-                 mode="train"):
+                 batch_size=32, shuffle=False, augment=False):
 
         # Core data
         self.metadata = metadata
@@ -100,8 +99,6 @@ class BaseDataset(Dataset):
         self.shuffle = shuffle
         # TODO: Not implemented yet, will need albumentations
         self.augment = augment
-        # TODO: Do we need to worry about the mode? Doesn't PL handle that?
-        self.mode = mode
 
         if transform is not None:
             self.transform = transform
@@ -222,14 +219,13 @@ class BaseDataset(Dataset):
 class LazyDataset(BaseDataset):
     """Reads te spectrograms from path"""
     def __init__(self, metadata, spectrogram_dir, eeg_spectrogram_dir,
-                 transform=None, batch_size=32, shuffle=False, augment=False,
-                 mode="train"):
+                 transform=None, batch_size=32, shuffle=False, augment=False):
 
         self.spectrogram_dir = spectrogram_dir
         self.eeg_spectrogram_dir = eeg_spectrogram_dir
 
         super().__init__(metadata, transform,
-                         batch_size, shuffle, augment, mode)
+                         batch_size, shuffle, augment)
 
     def get_spectrogram(self, spectrogram_id):
         spectrogram = pd.read_parquet(
@@ -248,14 +244,13 @@ class LazyDataset(BaseDataset):
 class PreloadedDataset(BaseDataset):
     """Has spectrogram dictionaries which have the data preloaded"""
     def __init__(self, metadata, spectrograms, eeg_spectrograms,
-                 transform=None, batch_size=32, shuffle=False, augment=False,
-                 mode="train"):
+                 transform=None, batch_size=32, shuffle=False, augment=False):
 
         self.spectrograms = spectrograms
         self.eeg_spectrograms = eeg_spectrograms
 
         super().__init__(metadata, transform,
-                         batch_size, shuffle, augment, mode)
+                         batch_size, shuffle, augment)
 
     def get_spectrogram(self, spectrogram_id):
         return self.spectrograms[spectrogram_id]
