@@ -202,6 +202,7 @@ class TrainDataset(Dataset):
 
 
 # NOTE: Train and Test set are sufficiently different to warrant different loaders
+# TODO: Shares a lot of code with TrainDataset, maybe inherit from base class
 class TestDataset(Dataset):
     """Gives spectrograms."""
     def __init__(self, metadata, fetcher, transform=None,
@@ -296,7 +297,9 @@ class TestDataset(Dataset):
         X[:4, 14:-14, :] = kaggle_spectrograms[:, :, 22:-22] / 2.0
 
         # EEG SPECTROGRAMS, already processed?
-        eeg_spectrograms = self.fetcher.get_eeg_spectrogram(eeg_spectrogram_id)
+        eeg_spectrograms = self.fetcher.get_eeg_spectrogram(eeg_spectrogram_id) \
+                               .swapaxes(2, 1) \
+                               .swapaxes(0, 1)
         X[4:, ...] = eeg_spectrograms
 
         # Convert into tensors
