@@ -19,7 +19,7 @@ class EfficientNetB0Starter(torch.nn.Module):
         # Then apply softmax to get probabilities
         self.layers = torch.nn.Sequential(
             efficientnet_b0(num_classes=6),
-            torch.nn.Softmax(dim=1)
+            torch.nn.LogSoftmax(dim=1)
         )
 
     def forward(self, x):
@@ -32,10 +32,14 @@ class LitENB0(pl.LightningModule):
         self.model = EfficientNetB0Starter()
 
     def training_step(self, batch, batch_idx):
-        x, y   = batch
-        y_pred = self.model(x)
+        x, y       = batch
+        y_pred_log = self.model(x)
         # Compute the batch average of kld
-        loss   = torch.nn.functional.kl_div(y_pred, y, reduction="batchmean")
+        # kl_div assumes that y_pred_log is log_probabilities
+        # And y unless specified are regular probabilities
+        loss       = torch.nn.functional.kl_div(
+            y_pred_log, y, reduction="batchmean")
+        self.log("loss", loss)
         return loss
 
     def configure_optimizers(self):
