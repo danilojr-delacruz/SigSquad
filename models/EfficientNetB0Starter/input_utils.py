@@ -16,7 +16,7 @@ def modify_train_metadata(train_metadata):
     # - Get the patient_id
     # - Then below we compute the expert vote distribution
     train = train_metadata.groupby("eeg_id").agg(
-        spec_id            = pd.NamedAgg("spectrogram_id", "first"),
+        spectrogram_id     = pd.NamedAgg("spectrogram_id", "first"),
         min_offset_seconds = pd.NamedAgg("spectrogram_label_offset_seconds", "min"),
         max_offset_seconds = pd.NamedAgg("spectrogram_label_offset_seconds", "max"),
         patient_id         = pd.NamedAgg("patient_id", "first"),
@@ -156,7 +156,7 @@ class TrainDataset(Dataset):
         # TODO: Maybe divided by 2 to get in terms of seconds? That would be wrong
         offset = int((row["min_offset_seconds"] + row["max_offset_seconds"]) // 4)
 
-        spectrogram_id = row.spec_id
+        spectrogram_id = row.spectrogram_id
         eeg_spectrogram_id = row.eeg_id
 
         # EXTRACT 300 ROWS OF SPECTROGRAM
@@ -270,7 +270,7 @@ class TestDataset(Dataset):
 
         row = self.metadata.iloc[idx]
 
-        spectrogram_id = row.spec_id
+        spectrogram_id = row.spectrogram_id
         eeg_spectrogram_id = row.eeg_id
 
         # EXTRACT 300 ROWS OF SPECTROGRAM
