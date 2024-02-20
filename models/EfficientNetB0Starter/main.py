@@ -74,6 +74,9 @@ test_metadata = pd.read_csv(TEST_METADATA_DIR)
 
 # READ ALL SPECTROGRAMS
 test_spectrograms     = preload_spectrograms(TEST_SPECTROGRAM_DIR)
+# TODO: In training, was the spectrogram eeg over the entire duration or just the desired segment
+# It was precomputed for us so we don't know.
+# If so, essentially left hand side is full spectrogram, and right hand side is zoomed in
 test_eeg_spectrograms = preload_eeg_spectrograms(TEST_EEG_DIR)
 
 # READ ALL EEG SPECTROGRAMS AND CONVERT
