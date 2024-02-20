@@ -106,15 +106,13 @@ class TrainDataset(Dataset):
         self.TARGETS = TARGETS
         self.num_targets = len(TARGETS)
 
-        # TODO: Why 128 x 256?
-        # My guess is that this is a standard size for an image
-        # And we are using a standard Architecture which probably assumes 128x256
+        # 128 x 256 to get into standard shape for EfficientNet
 
         # There are 100 frequencies, pad either side with 0s to get 128
-        self.img_width  = 128
-        # There are 300 timesteps (each 2 seconds) and crop by 22 symmetrically
-        # to get 256
-        self.img_height = 256
+        self.img_height  = 128
+        # There are 300 timesteps (each 2 seconds)
+        # crop by 22 symmetrically to get 256
+        self.img_width   = 256
 
         # There are 4 types: Left and Right for Parasagittal and Lateral
         # Then 8 in total because using Kaggle Spectrograms and one inferred from EEG
@@ -151,8 +149,8 @@ class TrainDataset(Dataset):
     def __getitem__(self, idx):
         """Assuming idx is an int."""
 
-        # NOTE: Channels first for PyTorch
-        X = np.zeros((self.num_spectrograms, self.img_width, self.img_height), dtype="float32")
+        # NOTE: PyTorch Layout of (Channel, Height, Width)
+        X = np.zeros((self.num_spectrograms, self.img_height, self.img_width), dtype="float32")
         y = np.zeros((self.num_targets,), dtype="float32")
 
         row = self.metadata.iloc[idx]
