@@ -1,17 +1,7 @@
-VER = 5
-
 # Contains all of the eegs together in one file - faster
-# TODO: Local computers might not have enough ram, so consider one which processes as it goes.
 TRAIN_METADATA_DIR     = "/kaggle/input/hms-harmful-brain-activity-classification/train.csv"
 KAGGLE_SPECTROGRAM_DIR = "/kaggle/input/brain-spectrograms/specs.npy"
 EEG_SPECTROGRAM_DIR    = "/kaggle/input/brain-eeg-spectrograms/eeg_specs.npy"
-
-# # IF THIS EQUALS NONE, THEN WE TRAIN NEW MODELS
-# # IF THIS EQUALS DISK PATH, THEN WE LOAD PREVIOUSLY TRAINED MODELS
-LOAD_MODELS_FROM = "/kaggle/input/brain-efficientnet-models-v3-v4-v5/"
-USE_KAGGLE_SPECTROGRAMS = True
-USE_EEG_SPECTROGRAMS = True
-
 
 TEST_METADATA_DIR    = "/kaggle/input/hms-harmful-brain-activity-classification/test.csv"
 TEST_SPECTROGRAM_DIR = "/kaggle/input/hms-harmful-brain-activity-classification/test_spectrograms"
