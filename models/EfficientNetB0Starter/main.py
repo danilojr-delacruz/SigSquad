@@ -57,8 +57,8 @@ eeg_spectrograms = np.load(EEG_SPECTROGRAM_DIR,allow_pickle=True).item()
 model = LitENB0()
 model.load_state_dict(torch.load("../../personal_sandbox/trained_model_19-02-2024.pt"))
 
-# 3. Test Model ---------------------------------------------------------------
 del eeg_spectrograms, spectrograms; gc.collect()
+# 3. Test Model ---------------------------------------------------------------
 
 test_metadata = pd.read_csv(TEST_METADATA_DIR)
 
@@ -67,12 +67,12 @@ test_spectrograms     = preload_spectrograms(TEST_SPECTROGRAM_DIR)
 # TODO: In training, was the spectrogram eeg over the entire duration or just the desired segment
 # It was precomputed for us so we don't know.
 # If so, essentially left hand side is full spectrogram, and right hand side is zoomed in
-test_eeg_spectrograms = preload_eeg_spectrograms(TEST_EEG_DIR)
+test_eeg_spectrograms = preload_eeg_spectrograms(test_metadata, TEST_EEG_DIR)
 
 # READ ALL EEG SPECTROGRAMS AND CONVERT
 
 fetcher      = PreloadedSpectrogramFetcher(test_spectrograms, test_eeg_spectrograms)
-test_dataset = TestDataset(test_metadata, shuffle=False)
+test_dataset = TestDataset(test_metadata, fetcher, shuffle=False)
 test_loader  = DataLoader(test_dataset)
 
 predictions = model.predict(test_loader)

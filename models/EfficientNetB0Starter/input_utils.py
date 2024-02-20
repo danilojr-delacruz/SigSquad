@@ -26,6 +26,8 @@ def preload_eeg_spectrograms(metadata, eeg_dir):
         img = spectrogram_from_eeg(f"{eeg_dir}/{eeg_id}.parquet")
         spectrograms[eeg_id] = img
 
+    return spectrograms
+
 
 # Don't need to precompute as cheap to compute
 def modify_train_metadata(train_metadata):
