@@ -50,3 +50,13 @@ class LitENB0(pl.LightningModule):
         optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
         return optimizer
 
+    def predict(self, dataloader):
+        outputs = []
+        # Don't need to compute gradients
+        with torch.no_grad():
+            for batch_idx, batch in enumerate(dataloader):
+                output = self(batch)
+                outputs.append(output)
+
+        return torch.concatenate(outputs)
+
