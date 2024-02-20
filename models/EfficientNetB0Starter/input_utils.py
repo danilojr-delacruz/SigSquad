@@ -298,10 +298,10 @@ class TestDataset(Dataset):
         return X
 
 
+# Have in name only for now
 class Fetcher:
     """Fetches data"""
-    def __init__(self, metadata):
-        self.metadata = metadata
+    pass
 
 
 # TODO: Maybe consider doing an LRU sort of thing?
@@ -311,14 +311,10 @@ class LazySpectrogramFetcher(Fetcher):
     """Reads the spectrograms from path.
     Assumes that eeg_spectrograms are precomputed and stored.
     """
-    def __init__(self, metadata, spectrogram_dir, eeg_spectrogram_dir,
-                 transform=None, shuffle=False, augment=False):
+    def __init__(self, spectrogram_dir, eeg_spectrogram_dir):
 
         self.spectrogram_dir = spectrogram_dir
         self.eeg_spectrogram_dir = eeg_spectrogram_dir
-
-        super().__init__(metadata, transform,
-                         shuffle, augment)
 
     def get_spectrogram(self, spectrogram_id):
         spectrogram = pd.read_parquet(
@@ -336,14 +332,10 @@ class LazySpectrogramFetcher(Fetcher):
 
 class PreloadedSpectrogramFetcher(Fetcher):
     """Has spectrogram dictionaries which have the data preloaded"""
-    def __init__(self, metadata, spectrograms, eeg_spectrograms,
-                 transform=None, shuffle=False, augment=False):
+    def __init__(self, spectrograms, eeg_spectrograms):
 
         self.spectrograms = spectrograms
         self.eeg_spectrograms = eeg_spectrograms
-
-        super().__init__(metadata, transform,
-                         shuffle, augment)
 
     def get_spectrogram(self, spectrogram_id):
         return self.spectrograms[spectrogram_id]
