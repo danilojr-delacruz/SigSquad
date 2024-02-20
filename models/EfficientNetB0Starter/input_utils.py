@@ -87,13 +87,14 @@ def create_modified_eeg_metadata_df(eeg_metadata_df):
     return train
 
 
-class BaseDataset(Dataset):
+class TrainDataset(Dataset):
     """Gives spectrograms."""
-    def __init__(self, metadata, transform=None,
+    def __init__(self, metadata, fetcher, transform=None,
                  shuffle=False, augment=False):
 
         # Core data
         self.metadata = metadata
+        self.fetcher  = fetcher
 
         self.shuffle = shuffle
         # TODO: Not implemented yet, will need albumentations
@@ -180,7 +181,7 @@ class BaseDataset(Dataset):
         # (300, 100, 4)
         # (100, 300, 4)
         kaggle_spectrograms = \
-            self.get_spectrogram(spectrogram_id)[offset: offset+300] \
+            self.fetcher.get_spectrogram(spectrogram_id)[offset: offset+300] \
                 .reshape(300, 4, 100) \
                 .swapaxes(1, 2) \
                 .swapaxes(0, 1)
@@ -193,7 +194,7 @@ class BaseDataset(Dataset):
         X[14:-14, :, :4] = kaggle_spectrograms[..., 22:-22, :] / 2.0
 
         # EEG SPECTROGRAMS, already processed?
-        eeg_spectrograms = self.get_eeg_spectrogram(eeg_spectrogram_id)
+        eeg_spectrograms = self.fetcher.get_eeg_spectrogram(eeg_spectrogram_id)
         X[:, :, 4:] = eeg_spectrograms
 
         y = row[TARGETS].values.astype(float)
@@ -205,18 +206,20 @@ class BaseDataset(Dataset):
 
         return X, y
 
-    def get_spectrogram(self, spectrogram_id):
-        pass
 
-    def get_eeg_spectrogram(self, eeg_spectrogram_id):
-        pass
+class Fetcher:
+    """Fetches data"""
+    def __init__(self, metadata):
+        self.metadata = metadata
 
 
 # TODO: Maybe consider doing an LRU sort of thing?
 # But actually most likely just going to have enough resources to
 # hold everything in RAM and so we use PreloadedDataset for speed
-class LazyDataset(BaseDataset):
-    """Reads the spectrograms from path"""
+class LazySpectrogramFetcher(Fetcher):
+    """Reads the spectrograms from path.
+    Assumes that eeg_spectrograms are precomputed and stored.
+    """
     def __init__(self, metadata, spectrogram_dir, eeg_spectrogram_dir,
                  transform=None, shuffle=False, augment=False):
 
@@ -240,7 +243,7 @@ class LazyDataset(BaseDataset):
         return eeg_spectrogram
 
 
-class PreloadedDataset(BaseDataset):
+class PreloadedSpectrogramFetcher(Fetcher):
     """Has spectrogram dictionaries which have the data preloaded"""
     def __init__(self, metadata, spectrograms, eeg_spectrograms,
                  transform=None, shuffle=False, augment=False):
