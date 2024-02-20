@@ -8,45 +8,39 @@ from constants import TARGETS
 # TODO: Add some tests to check these work.
 def create_spectrogram_image_tile(spectrograms):
     """Assuming shape is tensor of shape
-    (batch_size, height, width, num_spectrograms)
-    Where width=128, height=256, num_spectrograms=8
+    (num_spectrograms, height, width)
+    (8               , 128   , 256  )
     Where the first four is the kaggle spectrograms, followed by EEG
-    """
 
-    batch_size, height, width, num_spectrograms = spectrograms.shape
-    # Assumption, manual override
-    if num_spectrograms != 8:
-        raise Exception(f"Num spectrograms = {num_spectrograms}, expected 8")
-
-    num_spectrograms = 8
-
-    # TODO: Either work on channel first everywhere
-    # Or need to adapt for channel last formulation
-    #
-    # Initially
-    # (batch_size, height, width, num_spectrograms)
-    # For now want to get it in the form of
-    # (batch_size, num_spectrograms, height, width)
-    X  = spectrograms.swapaxes(3, 2).swapaxes(2, 1)
-    # Vertically stack into two columns
-    X1 = X.reshape(batch_size, 2, 4*height, width)
-    # Horizontally stack the two (long) columns
-    X2 = torch.concatenate([X1[:, 0, ...], X1[:, 1, ...]], axis=-1)
-    # Repeat along the third dimension
-    X3 = X2.unsqueeze(1).repeat(1, 3, 1, 1)
-
-    # So you can think of the output as
+    # Output is
     # ---> Axis 2
     # K1 E1
     # K2 E2
     # K3 E3
     # K4 E4
     # Vertical is axis 1, horizontal is axis 2.
-    # Axis 3 is the colour, which is just gray scale as equal.
+    # Axis 3 is colour, which is gray-scale as values repeated.
     # Summary: Input is just all the spectrograms tiled together into one
-    # 512 x 512 image.
+    # (3, 512, 512) image.
+    """
 
-    return X3
+    num_spectrograms, height, width = spectrograms.shape
+    # Assumption, manual override
+    if num_spectrograms != 8:
+        raise Exception(f"Num spectrograms = {num_spectrograms}, expected 8")
+
+    num_spectrograms = 8
+
+    # Initial Shape: (8, 128, 256)
+    # (2, 512, 256)
+    X = X.reshape(2, 4*height, width)
+    # Horizontally stack the two (long) columns
+    # (512, 512)
+    X = torch.concatenate([X[0, ...], X[1, ...]], axis=-1)
+    # Repeat along the third dimension
+    X = X.unsqueeze(0).repeat(3, 1, 1)
+
+    return X
 
 
 # TODO: Why is this not in its own file? I guess it is computed very quickly.
@@ -194,8 +188,7 @@ class TrainDataset(Dataset):
         y = row[TARGETS].values.astype(float)
 
         # Convert into tensors
-        # TODO: Making it batched to use the function which assumes batched
-        X = create_spectrogram_image_tile(torch.tensor(X).unsqueeze(0))[0, ...]
+        X = create_spectrogram_image_tile(torch.tensor(X))
         y = torch.tensor(y, dtype=torch.float32)
 
         return X, y
