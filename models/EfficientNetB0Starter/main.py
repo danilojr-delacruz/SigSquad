@@ -58,8 +58,11 @@ model = LitENB0()
 model.load_state_dict(torch.load("../../personal_sandbox/trained_model_19-02-2024.pt"))
 
 del eeg_spectrograms, spectrograms; gc.collect()
+
 # 3. Test Model ---------------------------------------------------------------
 
+# Put into evaluation mode, turns off dropout
+model.eval()
 test_metadata = pd.read_csv(TEST_METADATA_DIR)
 
 # READ ALL SPECTROGRAMS
