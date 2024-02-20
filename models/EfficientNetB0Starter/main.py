@@ -59,8 +59,8 @@ train_metadata = modify_train_metadata(train_metadata)
 
 # Read precomputed spectrograms (from kaggle and eeg)
 # that are all placed in one dictionary
-spectrograms = np.load(KAGGLE_SPECTROGRAM_DIR, allow_pickle=True).item()
-all_eegs = np.load(EEG_SPECTROGRAM_DIR,allow_pickle=True).item()
+spectrograms     = np.load(KAGGLE_SPECTROGRAM_DIR, allow_pickle=True).item()
+eeg_spectrograms = np.load(EEG_SPECTROGRAM_DIR,allow_pickle=True).item()
 
 # 2. Build and Train Model -----------------------------------------------------
 
@@ -68,7 +68,7 @@ model = LitENB0()
 model.load_state_dict(torch.load("../../personal_sandbox/trained_model_19-02-2024.pt"))
 
 # 3. Test Model ---------------------------------------------------------------
-del all_eegs, spectrograms; gc.collect()
+del eeg_spectrograms, spectrograms; gc.collect()
 
 test_metadata = pd.read_csv(TEST_METADATA_DIR)
 
