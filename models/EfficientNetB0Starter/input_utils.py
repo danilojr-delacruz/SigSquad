@@ -71,7 +71,7 @@ def create_spectrogram_image_tile(spectrograms):
 
     # Initial Shape: (8, 128, 256)
     # (2, 512, 256)
-    X = X.reshape(2, 4*height, width)
+    X = spectrograms.reshape(2, 4*height, width)
     # Horizontally stack the two (long) columns
     # (512, 512)
     X = torch.concatenate([X[0, ...], X[1, ...]], axis=-1)
