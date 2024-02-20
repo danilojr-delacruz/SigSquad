@@ -151,12 +151,8 @@ class TrainDataset(Dataset):
     def __getitem__(self, idx):
         """Assuming idx is an int."""
 
-        # Shape is (width, height, num_channels)
-        # TODO: PyTorch uses channels first.
-        # Keep like this for downstream compatibility. But change to faster one.
-        # (Between channel first and last)
-
-        X = np.zeros((self.img_width, self.img_height, self.num_spectrograms), dtype="float32")
+        # NOTE: Channels first for PyTorch
+        X = np.zeros((self.num_spectrograms, self.img_width, self.img_height), dtype="float32")
         y = np.zeros((self.num_targets,), dtype="float32")
 
         row = self.metadata.iloc[idx]
@@ -171,31 +167,31 @@ class TrainDataset(Dataset):
         eeg_spectrogram_id = row.eeg_id
 
         # EXTRACT 300 ROWS OF SPECTROGRAM
-        # Spectrogram sampled every 2 seconds soe 300 rows is 600 seconds
+        # Spectrogram sampled every 2 seconds so 300 rows is 600 seconds
         # I.e. 10 minutes
         # NOTE: In actual parquet file, the first column is time.
         # But precomputed specs does not have a time column.
         # Shape progression
         # (300, 100 * 4)
         # (300, 4, 100)
-        # (300, 100, 4)
-        # (100, 300, 4)
+        # (4, 300, 100)
+        # (4, 100, 300)
         kaggle_spectrograms = \
             self.fetcher.get_spectrogram(spectrogram_id)[offset: offset+300] \
                 .reshape(300, 4, 100) \
-                .swapaxes(1, 2) \
-                .swapaxes(0, 1)
-        # Shape: (num_timesteps, num_frequencies, num_spectrograms)
+                .swapaxes(0, 1) \
+                .swapaxes(1, 2)
+        # Shape: (num_spectrograms, num_timesteps, num_frequencies)
         kaggle_spectrograms = self.transform(kaggle_spectrograms)
 
         # CROP TO 256 TIME STEPS with 22:-22
         # Pad to 128 frequencies with 14:-14
         # TODO: Why divide value by 2?
-        X[14:-14, :, :4] = kaggle_spectrograms[..., 22:-22, :] / 2.0
+        X[:4, 14:-14, :] = kaggle_spectrograms[:, :, 22:-22] / 2.0
 
         # EEG SPECTROGRAMS, already processed?
         eeg_spectrograms = self.fetcher.get_eeg_spectrogram(eeg_spectrogram_id)
-        X[:, :, 4:] = eeg_spectrograms
+        X[4:, ...] = eeg_spectrograms
 
         y = row[TARGETS].values.astype(float)
 
