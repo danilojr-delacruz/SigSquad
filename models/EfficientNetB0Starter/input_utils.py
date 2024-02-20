@@ -182,7 +182,13 @@ class TrainDataset(Dataset):
         X[:4, 14:-14, :] = kaggle_spectrograms[:, :, 22:-22] / 2.0
 
         # EEG SPECTROGRAMS, already processed?
-        eeg_spectrograms = self.fetcher.get_eeg_spectrogram(eeg_spectrogram_id)
+        # Initial Shape: (128, 256, 4)
+        # Move into    : (4, 128, 256)
+        # TODO: When you have control over this, have the shape as (300, 400)
+        # for consistency
+        eeg_spectrograms = self.fetcher.get_eeg_spectrogram(eeg_spectrogram_id) \
+                               .swapaxes(2, 1) \
+                               .swapaxes(0, 1)
         X[4:, ...] = eeg_spectrograms
 
         y = row[TARGETS].values.astype(float)
