@@ -8,30 +8,8 @@ TEST_SPECTROGRAM_DIR = "/kaggle/input/hms-harmful-brain-activity-classification/
 TEST_EEG_DIR         = "/kaggle/input/hms-harmful-brain-activity-classification/test_eegs"
 
 
-# Initialise 2xT4 GPUs
-import os, gc
-os.environ["CUDA_VISIBLE_DEVICES"]="0,1"
+
 import pandas as pd
-import numpy as np
-
-# TODO: What to do about GPUs and Mixed Precision?
-# # USE MULTIPLE GPUS
-# gpus = tf.config.list_physical_devices("GPU")
-# if len(gpus)<=1:
-#     strategy = tf.distribute.OneDeviceStrategy(device="/gpu:0")
-#     print(f"Using {len(gpus)} GPU")
-# else:
-#     strategy = tf.distribute.MirroredStrategy()
-#     print(f"Using {len(gpus)} GPUs")
-
-# # USE MIXED PRECISION
-# MIX = True
-# if MIX:
-#     tf.config.optimizer.set_experimental_options({"auto_mixed_precision": True})
-#     print("Mixed precision enabled")
-# else:
-#     print("Using full precision")
-
 import torch
 from torch.utils.data import DataLoader
 
@@ -75,6 +53,7 @@ test_eeg_spectrograms = preload_eeg_spectrograms(test_metadata, TEST_EEG_DIR)
 
 fetcher      = PreloadedSpectrogramFetcher(test_spectrograms, test_eeg_spectrograms)
 test_dataset = TestDataset(test_metadata, fetcher, shuffle=False)
+# TODO: Can speed up evaluations with GPUs later
 test_loader  = DataLoader(test_dataset)
 
 predictions = model.predict(test_loader)
