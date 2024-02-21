@@ -81,7 +81,7 @@ test_loader  = DataLoader(test_dataset)
 predictions = model.predict(test_loader)
 
 # Ensure predictions sum to 1
-predictions /= predictions.sum(dim=1)
+predictions /= predictions.sum(dim=1).unsqueeze(1)
 
 submission = pd.DataFrame({"eeg_id": test_metadata.eeg_id.values})
 submission[TARGETS] = predictions
