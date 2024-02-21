@@ -308,7 +308,7 @@ class TestDataset(Dataset):
         # (4, 300, 100)
         # (4, 100, 300)
         kaggle_spectrograms = \
-            self.fetcher.get_spectrogram(spectrogram_id) \
+            self.fetcher.get_spectrogram(spectrogram_id)[:300] \
                 .reshape(300, 4, 100) \
                 .swapaxes(0, 1) \
                 .swapaxes(1, 2)
