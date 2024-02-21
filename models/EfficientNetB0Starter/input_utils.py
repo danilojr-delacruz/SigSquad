@@ -3,8 +3,8 @@ import os
 import numpy as np
 import pandas as pd
 from torch.utils.data import Dataset
-from utils import spectrogram_from_eeg
 
+from utils import spectrogram_from_eeg
 from constants import TARGETS
 
 

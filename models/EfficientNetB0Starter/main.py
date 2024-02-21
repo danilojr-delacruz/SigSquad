@@ -32,15 +32,14 @@ import numpy as np
 # else:
 #     print("Using full precision")
 
+import torch
+from torch.utils.data import DataLoader
 
 from input_utils import modify_train_metadata, PreloadedSpectrogramFetcher, \
                         TrainDataset, TestDataset, \
                         preload_spectrograms, preload_eeg_spectrograms
 from model import LitENB0
 from constants import TARGETS
-from torch.utils.data import DataLoader
-
-import torch
 
 # 1. Reading Data --------------------------------------------------------------
 # Ignore the sub_ids

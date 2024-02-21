@@ -1,4 +1,3 @@
-from lightning.pytorch.utilities.types import OptimizerLRScheduler
 import torch
 import lightning as pl
 from torchvision.models import efficientnet_b0
