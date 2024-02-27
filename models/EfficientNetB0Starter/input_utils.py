@@ -174,10 +174,8 @@ class TrainDataset(Dataset):
 
         row = self.metadata.iloc[idx]
 
-        # TODO: Why are they looking at 1/4 of the offset range?
-        # To bias more towards the start?
-        # Surely you should just use min_offset_seconds.
-        # TODO: Maybe divided by 2 to get in terms of seconds? That would be wrong
+        # Divide by 2 to get the midpoint
+        # Divide by 2 again because tick sizes of spectrogram is 2 seconds instead of 1.
         offset = int((row["min_offset_seconds"] + row["max_offset_seconds"]) // 4)
 
         spectrogram_id = row.spectrogram_id
