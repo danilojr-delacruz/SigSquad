@@ -63,7 +63,9 @@ class LitENB0(pl.LightningModule):
 class TuchilusEfficientNetB0(torch.nn.Module):
     """Exploit the Starfish!
 
-    Bias towards idealised and proto
+    Bias towards idealised and proto.
+    TODO: Issue where we need to output log probabilities
+    so potential for numerical errors here.
     """
     def __init__(self):
         super().__init__()
@@ -71,7 +73,7 @@ class TuchilusEfficientNetB0(torch.nn.Module):
         # 21 for our case as n = 6
         self.layers = torch.nn.Sequential(
             efficientnet_b0(num_classes=21),
-            torch.nn.LogSoftmax(dim=1)
+            torch.nn.Softmax(dim=1)
         )
         self.tuchilus_matrix = self.generate_tuchilus_matrix()
 
@@ -80,7 +82,8 @@ class TuchilusEfficientNetB0(torch.nn.Module):
         pre_probabilities = self.layers(x)
         # (batch_size, 6)
         probabilities = pre_probabilities @ self.tuchilus_matrix
-        return probabilities
+        log_probabilities = torch.log(probabilities)
+        return log_probabilities
 
     # TODO: Can we generalise this and make it more trainable?
     @staticmethod
