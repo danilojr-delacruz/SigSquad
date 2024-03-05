@@ -86,9 +86,8 @@ class TuchilusEfficientNetB0(torch.nn.Module):
         return log_probabilities
 
     # TODO: Can we generalise this and make it more trainable?
-    @staticmethod
-    def generate_tuchilus_matrix():
-        M = torch.zeros(21, 6)
+    def generate_tuchilus_matrix(self):
+        M = torch.nn.Parameter(torch.zeros(21, 6), requires_grad=False)
         for i in range(6):
             M[i, i] = 1
 
