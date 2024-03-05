@@ -59,3 +59,49 @@ class LitENB0(pl.LightningModule):
 
         return torch.concatenate(outputs)
 
+
+class TuchilusEfficientNetB0(torch.nn.Module):
+    """Exploit the Starfish!
+
+    Bias towards idealised and proto
+    """
+    def __init__(self):
+        super().__init__()
+        # Have n + (n 2) options
+        # 21 for our case as n = 6
+        self.layers = torch.nn.Sequential(
+            efficientnet_b0(num_classes=21),
+            torch.nn.LogSoftmax(dim=1)
+        )
+        self.tuchilus_matrix = self.generate_tuchilus_matrix()
+
+    def forward(self, x):
+        # (batch_size, 21)
+        pre_probabilities = self.layers(x)
+        # (batch_size, 6)
+        probabilities = pre_probabilities @ self.tuchilus_matrix
+        return probabilities
+
+    # TODO: Can we generalise this and make it more trainable?
+    @staticmethod
+    def generate_tuchilus_matrix():
+        M = torch.zeros(21, 6)
+        for i in range(6):
+            M[i, i] = 1
+
+        # Going to be ordering these as
+        # 1 2 3 4 5 6
+        # 12 13 14 15 16
+        # 23 24 25 26
+        # 34 35 36
+        # 45 46
+        # 56
+        # TODO: I can't quadratic formula
+        jumps = [6, 5, 4, 3, 2, 1]
+        for i in range(5):
+            for j in range(i+1, 6):
+                position = sum(jumps[:i+1]) + (j-i-1)
+                M[position, i] = 0.5
+                M[position, j] = 0.5
+
+        return M
