@@ -25,14 +25,17 @@ class EfficientNetB0Starter(torch.nn.Module):
         return self.layers(x)
 
 
-class LitENB0(pl.LightningModule):
-    def __init__(self):
+class KldClassifier(pl.LightningModule):
+    """Takes a classifier which returns log probabilities
+    Then uses KLD as the loss function.
+    """
+    def __init__(self, classifier):
         super().__init__()
-        self.model = EfficientNetB0Starter()
+        self.classifier = classifier
 
     def training_step(self, batch, batch_idx):
         x, y       = batch
-        y_pred_log = self.model(x)
+        y_pred_log = self.classifier(x)
         # Compute the batch average of kld
         # kl_div assumes that y_pred_log is log_probabilities
         # And y unless specified are regular probabilities
