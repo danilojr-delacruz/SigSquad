@@ -5,7 +5,7 @@ import pandas as pd
 from torch.utils.data import Dataset
 
 from utils import spectrogram_from_eeg
-from constants import TARGETS
+from constants import TARGETS, SPECTROGRAM_SAMPLING_RATE_HZ
 
 
 def preload_spectrograms(spectrogram_dir):
@@ -46,6 +46,10 @@ def modify_train_metadata(train_metadata):
         patient_id         = pd.NamedAgg("patient_id", "first"),
         target             = pd.NamedAgg("expert_consensus", "first")
         )
+
+    # Use snapshot in middle of recording
+    train["offset_seconds"] = (train["min_offset_seconds"] + train["max_offset_seconds"]) // 2
+    train = train.drop(["min_offset_seconds", "max_offset_seconds"], axis=1)
 
     # TODO: Investigate further. Surely the vote distribution could change over time.
     # And if we're only doing the first eeg segment then this number is not representative
@@ -174,9 +178,8 @@ class TrainDataset(Dataset):
 
         row = self.metadata.iloc[idx]
 
-        # Divide by 2 to get the midpoint
-        # Divide by 2 again because tick sizes of spectrogram is 2 seconds instead of 1.
-        offset = int((row["min_offset_seconds"] + row["max_offset_seconds"]) // 4)
+        # Divide by 2 because tick sizes of spectrogram is 2 seconds instead of 1.
+        spectrogram_offset = int(row["offset_seconds"] * SPECTROGRAM_SAMPLING_RATE_HZ)
 
         spectrogram_id = row.spectrogram_id
         eeg_spectrogram_id = row.eeg_id
@@ -192,7 +195,7 @@ class TrainDataset(Dataset):
         # (4, 300, 100)
         # (4, 100, 300)
         kaggle_spectrograms = \
-            self.fetcher.get_spectrogram(spectrogram_id)[offset: offset+300] \
+            self.fetcher.get_spectrogram(spectrogram_id)[spectrogram_offset: spectrogram_offset+300] \
                 .reshape(300, 4, 100) \
                 .swapaxes(0, 1) \
                 .swapaxes(1, 2)
