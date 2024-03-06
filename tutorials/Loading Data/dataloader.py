@@ -29,13 +29,17 @@ TARGETS = [
 METADATA_DF = pd.read_csv(TRAIN_METADATA_DIR)
 
 
-class RichLoader(Dataset):
+class RichDataset(Dataset):
     """Returns eeg, spectrograms as DataFrames
     Returns votes as Series
 
     Can only load one point at a time.
     Hence index with ints only.
     Index corresponds to those in METADATA_DF
+
+    Dataloader will handle batching for us
+    and it will be parallelised when we
+    specify num_workers > 1
     """
     def __init__(self, transform=None):
 
@@ -54,6 +58,7 @@ class RichLoader(Dataset):
         return pd.read_parquet(filename)
 
     def __getitem__(self, idx):
+        """Can only index with an integer"""
         assert type(idx) is int, "Can only index with int"
 
         row = METADATA_DF.iloc[idx]
@@ -79,55 +84,3 @@ class RichLoader(Dataset):
         # spectrogram_snapshot is (300, 400)
         # votes is (6, )
         return eeg_snapshot, spectrogram_snapshot, votes
-
-
-class TensorLoader(Dataset):
-    """Returns eeg, spectrograms, votes as Tensors in batched form
-
-    Index with ints. E.g. [[5, 4, 3, 2]]
-    """
-    def __init__(self, transform=None):
-
-        if transform is not None:
-            self.transform = transform
-
-        self.auxiliary_loader = RichLoader()
-
-    def __len__(self):
-        return len(METADATA_DF)
-
-
-    def __getitem__(self, idx):
-        # Make it a list
-        if type(idx) is int:
-            idx = [idx]
-
-        eeg_snapshots = []
-        spectrogram_snapshots = []
-        votes = []
-
-        for _, index in enumerate(idx):
-            eeg_snapshot, spectrogram_snaphot, vote = self.auxiliary_loader[index]
-            # Put these into batch form by unsqueezing. Shape is now (1, ...)
-            # Ensure dtypes are torch.float32
-            eeg_snapshots        .append(torch.tensor(eeg_snapshot.values,
-                                                      dtype=torch.float32).unsqueeze(0))
-            spectrogram_snapshots.append(torch.tensor(spectrogram_snaphot.values,
-                                                      dtype=torch.float32).unsqueeze(0))
-            votes                .append(torch.tensor(vote.values.astype(float),
-                                                      dtype=torch.float32).unsqueeze(0))
-
-        tensor_eeg_snapshots = torch.concatenate(eeg_snapshots)
-        tensor_spectrogram_snapshots = torch.concatenate(spectrogram_snapshots)
-        tensor_votes = torch.concatenate(votes)
-
-        tensor_eeg_snapshots = tensor_eeg_snapshots.swapaxes(1, 2)
-        tensor_spectrogram_snapshots = tensor_spectrogram_snapshots.swapaxes(1, 2) \
-            .reshape(len(idx), NUM_BRAIN_REGIONS,
-                     NUM_SPECTROGRAM_FREQUENCIES, SPECTROGRAM_SNAPSHOT_DURATION)
-
-        # eeg_snapshot is         (batch_size, 20, 10_000)
-        # spectrogram_snapshot is (batch_size, 4, 100, 300)
-        # votes is                (batch_size, 6)
-
-        return tensor_eeg_snapshots, tensor_spectrogram_snapshots, tensor_votes
