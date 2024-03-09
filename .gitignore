@@ -169,6 +169,7 @@ test_spectrograms/
 train.csv
 train_eegs/
 train_spectrograms/
+train_signatures/
 ## Personal Sandbox
 personal_sandbox/
 
