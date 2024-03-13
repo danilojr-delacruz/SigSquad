@@ -44,6 +44,11 @@ class KldClassifier(pl.LightningModule):
         self.log("loss", loss)
         return loss
 
+    def predict_step(self, batch, batch_idx, dataloader_idx=0):
+        # Assume that no y is passed in
+        x = batch
+        return torch.exp(self.classifier(x))
+
     def forward(self, x):
         """Return probabilities of classification"""
         return torch.exp(self.classifier(x))
@@ -51,16 +56,6 @@ class KldClassifier(pl.LightningModule):
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
         return optimizer
-
-    def predict(self, dataloader):
-        outputs = []
-        # Don't need to compute gradients
-        with torch.no_grad():
-            for batch_idx, batch in enumerate(dataloader):
-                output = self(batch)
-                outputs.append(output)
-
-        return torch.concatenate(outputs)
 
 
 class TuchilusEfficientNetB0(torch.nn.Module):

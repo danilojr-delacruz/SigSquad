@@ -8,6 +8,8 @@ MODEL_DIR            = "/kaggle/input/efficientnetb0-19-02-2024/trained_model_19
 
 import pandas as pd
 import torch
+import pytorch_lightning as pl
+
 from torch.utils.data import DataLoader
 
 from input_utils import PreloadedSpectrogramFetcher, TestDataset, \
@@ -38,7 +40,8 @@ test_dataset = TestDataset(test_metadata, fetcher, shuffle=False)
 # TODO: Can speed up evaluations with GPUs later
 test_loader  = DataLoader(test_dataset)
 
-predictions = model.predict(test_loader)
+trainer = pl.Trainer()
+predictions = torch.concat(trainer.predict(model, test_loader))
 
 # 3. Create Submission ---------------------------------------------------------
 
