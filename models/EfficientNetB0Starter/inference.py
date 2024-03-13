@@ -8,18 +8,18 @@ MODEL_DIR            = "/kaggle/input/efficientnetb0-19-02-2024/trained_model_19
 
 import pandas as pd
 import torch
-import pytorch_lightning as pl
+import lightning as pl
 
 from torch.utils.data import DataLoader
 
 from input_utils import PreloadedSpectrogramFetcher, TestDataset, \
                         preload_spectrograms, preload_eeg_spectrograms
-from model import LitENB0
+from model import KldClassifier, EfficientNetB0Starter
 from constants import TARGETS
 
 # 1. Build and Load Model ------------------------------------------------------
-
-model = LitENB0()
+enb0 = EfficientNetB0Starter()
+model = KldClassifier(enb0)
 model.load_state_dict(torch.load(MODEL_DIR))
 
 # 2. Generate Predictions ------------------------------------------------------
@@ -38,7 +38,7 @@ test_eeg_spectrograms = preload_eeg_spectrograms(test_metadata, TEST_EEG_DIR)
 fetcher      = PreloadedSpectrogramFetcher(test_spectrograms, test_eeg_spectrograms)
 test_dataset = TestDataset(test_metadata, fetcher, shuffle=False)
 # TODO: Can speed up evaluations with GPUs later
-test_loader  = DataLoader(test_dataset)
+test_loader  = DataLoader(test_dataset, num_workers=3)
 
 trainer = pl.Trainer()
 predictions = torch.concat(trainer.predict(model, test_loader))
