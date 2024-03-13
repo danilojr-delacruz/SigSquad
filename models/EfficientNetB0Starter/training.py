@@ -17,6 +17,8 @@ from input_utils import modify_train_metadata, TrainDataset, ValidationDataset, 
 from model import KldClassifier, EfficientNetB0Starter
 from constants import TARGETS
 
+NUM_FOLDS = 5
+
 # 1. Obtain Metadata and Loaders -----------------------------------------------
 
 train_metadata = pd.read_csv(TRAIN_METADATA_DIR)
@@ -41,7 +43,7 @@ oof_cv = []
 
 # Grouping by patient id
 # So for a given patient_id all instances of it will either be in the test or training set.
-gkf = GroupKFold(n_splits=5)
+gkf = GroupKFold(n_splits=NUM_FOLDS)
 for i, (train_index, valid_index) in enumerate(
     gkf.split(train_metadata, train_metadata.target, train_metadata.patient_id)):
 
@@ -76,7 +78,7 @@ for i, (train_index, valid_index) in enumerate(
 # 3. Compute CV Scores ----------------------------------------------
 
 # Compute CV Score by fold
-for i in range(5):
+for i in range(NUM_FOLDS):
     # TODO: Get the log probabilities directly
     oof_cv.append(torch.nn.functional.kl_div(
             torch.log(all_oof[i]), all_true[i], reduction="batchmean"))
