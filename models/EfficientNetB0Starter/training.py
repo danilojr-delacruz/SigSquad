@@ -17,7 +17,7 @@ from input_utils import modify_train_metadata, TrainDataset, ValidationDataset, 
 from model import KldClassifier, EfficientNetB0Starter
 from constants import TARGETS
 
-NUM_FOLDS = 2
+NUM_FOLDS = 5
 
 # 1. Obtain Metadata and Loaders -----------------------------------------------
 
@@ -31,8 +31,6 @@ kld_with_uniform = torch.nn.functional.kl_div(
     torch.ones(6) / 6,
     reduction="none").sum(dim=-1, keepdim=True)
 train_metadata["Non-uniformity"] = kld_with_uniform
-
-train_metadata = train_metadata.iloc[:1000, :]
 
 # This returns a boolean indexer
 hard_index = train_metadata["Non-uniformity"] < 5.5
