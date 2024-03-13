@@ -226,6 +226,16 @@ class TrainDataset(Dataset):
         return X, y
 
 
+class ValidationDataset(TrainDataset):
+    # Needs to read an offset as still working with
+    # train metadata
+    # Whereas test does not need this.
+    # However only want it to return X
+    def __getitem__(self, idx):
+        X, y = super().__getitem__(idx)
+        return X
+
+
 # NOTE: Train and Test set are sufficiently different to warrant different loaders
 # TODO: Shares a lot of code with TrainDataset, maybe inherit from base class
 class TestDataset(Dataset):
