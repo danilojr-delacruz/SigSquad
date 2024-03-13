@@ -17,20 +17,35 @@ from input_utils import modify_train_metadata, TrainDataset, ValidationDataset, 
 from model import KldClassifier, EfficientNetB0Starter
 from constants import TARGETS
 
-NUM_FOLDS = 5
+NUM_FOLDS = 2
 
 # 1. Obtain Metadata and Loaders -----------------------------------------------
 
 train_metadata = pd.read_csv(TRAIN_METADATA_DIR)
 train_metadata = modify_train_metadata(train_metadata)
 
+# Measure how non uniform a sample is.
+# TODO: Add this in modify_train_metadata once confirmed
+kld_with_uniform = torch.nn.functional.kl_div(
+    torch.log(torch.tensor((train_metadata.loc[:, TARGETS] + 1e-5).values)),
+    torch.ones(6) / 6,
+    reduction="none").sum(dim=-1, keepdim=True)
+train_metadata["Non-uniformity"] = kld_with_uniform
+
+train_metadata = train_metadata.iloc[:1000, :]
+
+# This returns a boolean indexer
+hard_index = train_metadata["Non-uniformity"] < 5.5
+# Want a numerical indexer
+hard_index = hard_index[hard_index].index
+
 train_fetcher = LazySpectrogramFetcher(KAGGLE_SPECTROGRAM_DIR, EEG_SPECTROGRAM_DIR)
 train_dataset = TrainDataset(train_metadata, train_fetcher)
+
 val_dataset = ValidationDataset(train_metadata, train_fetcher)
 
 torch.set_float32_matmul_precision('medium')
 logger = TensorBoardLogger("tb_logs")
-trainer = pl.Trainer(max_epochs=5, log_every_n_steps=1)
 
 # 2. Train Model and save weights ----------------------------------------------
 
@@ -50,15 +65,27 @@ for i, (train_index, valid_index) in enumerate(
     print(f"Fold {i}")
     # Build model
     enb0 = EfficientNetB0Starter()
-    model = KldClassifier(enb0)
+    model = KldClassifier(enb0, learning_rates=[
+        1e-3, 1e-3, 1e-3, 1e-4, 1e-5,
+        1e-5, 1e-5, 1e-6
+    ])
 
     # Train model
+    print("Training on all data")
+    trainer = pl.Trainer(max_epochs=5, log_every_n_steps=1)
     train_loader = DataLoader(Subset(train_dataset, train_index),
                               batch_size=8, num_workers=15)
     trainer.fit(model=model, train_dataloaders=train_loader)
 
+    print("Training on non-uniform samples")
+    trainer.fit_loop.max_epochs += 3
+    hard_train_loader = DataLoader(Subset(
+        train_dataset, list(set(train_index) & set(hard_index))),
+                              batch_size=8, num_workers=15)
+    trainer.fit(model=model, train_dataloaders=hard_train_loader)
+
     # Save weights
-    torch.save(model.state_dict(), f"model_{i}_weights.pt")
+    torch.save(model.state_dict(), f"model_weights/{i}.pt")
 
     val_loader = DataLoader(Subset(val_dataset, valid_index),
                             batch_size=8, num_workers=15, shuffle=False)
@@ -70,7 +97,7 @@ for i, (train_index, valid_index) in enumerate(
         oof_pred = torch.concat(trainer.predict(model, val_loader))
 
     # These should match as val_loader has shuffle=False
-    oof_true = torch.tensor(train_metadata.iloc[valid_index, -6:].values)
+    oof_true = torch.tensor(train_metadata.loc[valid_index, TARGETS].values)
 
     all_oof.append(oof_pred)
     all_true.append(oof_true)

@@ -67,7 +67,6 @@ class KldClassifier(pl.LightningModule):
         if epoch < len(self.learning_rates):
             lr = self.learning_rates[epoch]
             for param_group in self.optimizer.param_groups:
-                print(f"Mom I'm changing the learning rate to {param_group['lr'], lr}")
                 param_group['lr'] = lr
 
 
