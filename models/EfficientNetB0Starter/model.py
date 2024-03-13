@@ -29,9 +29,10 @@ class KldClassifier(pl.LightningModule):
     """Takes a classifier which returns log probabilities
     Then uses KLD as the loss function.
     """
-    def __init__(self, classifier):
+    def __init__(self, classifier, learning_rates=[1e-3]):
         super().__init__()
         self.classifier = classifier
+        self.learning_rates = learning_rates
 
     def training_step(self, batch, batch_idx):
         x, y       = batch
@@ -54,8 +55,20 @@ class KldClassifier(pl.LightningModule):
         return torch.exp(self.classifier(x))
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
-        return optimizer
+        self.optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
+        return self.optimizer
+
+    def on_train_epoch_start(self):
+        # TODO: Maybe can use one of the schedulers?
+        # Update learning rate at the beginning of each epoch
+        # Epoch does not change over different trainers
+        epoch = self.current_epoch
+        # Do not change the learning rate when we run out of new ones
+        if epoch < len(self.learning_rates):
+            lr = self.learning_rates[epoch]
+            for param_group in self.optimizer.param_groups:
+                print(f"Mom I'm changing the learning rate to {param_group['lr'], lr}")
+                param_group['lr'] = lr
 
 
 class TuchilusEfficientNetB0(torch.nn.Module):
