@@ -1,8 +1,4 @@
 # Contains all of the eegs together in one file - faster
-TRAIN_METADATA_DIR     = "/kaggle/input/hms-harmful-brain-activity-classification/train.csv"
-KAGGLE_SPECTROGRAM_DIR = "/kaggle/input/brain-spectrograms/specs.npy"
-EEG_SPECTROGRAM_DIR    = "/kaggle/input/brain-eeg-spectrograms/eeg_specs.npy"
-
 TEST_METADATA_DIR    = "/kaggle/input/hms-harmful-brain-activity-classification/test.csv"
 TEST_SPECTROGRAM_DIR = "/kaggle/input/hms-harmful-brain-activity-classification/test_spectrograms"
 TEST_EEG_DIR         = "/kaggle/input/hms-harmful-brain-activity-classification/test_eegs"
@@ -14,8 +10,7 @@ import pandas as pd
 import torch
 from torch.utils.data import DataLoader
 
-from input_utils import modify_train_metadata, PreloadedSpectrogramFetcher, \
-                        TrainDataset, TestDataset, \
+from input_utils import PreloadedSpectrogramFetcher, TestDataset, \
                         preload_spectrograms, preload_eeg_spectrograms
 from model import LitENB0
 from constants import TARGETS
