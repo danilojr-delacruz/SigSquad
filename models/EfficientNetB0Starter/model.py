@@ -42,7 +42,7 @@ class KldClassifier(pl.LightningModule):
         # And y unless specified are regular probabilities
         loss       = torch.nn.functional.kl_div(
             y_pred_log, y, reduction="batchmean")
-        self.log("loss", loss)
+        self.log("loss", loss, prog_bar=True)
         return loss
 
     def predict_step(self, batch, batch_idx, dataloader_idx=0):
