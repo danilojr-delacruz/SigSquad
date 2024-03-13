@@ -120,26 +120,3 @@ def calculate_signature(preprocessed, truncation_level=6):
     # assumes a 5 dimensional path
     signature = iisignature.sig(preprocessed, 5)
     return signature
-
-def calculate_logsignature_for_metadata(metadata, input_data_dir, output_data_dir, scaler_type, batch_size=100):
-    """Saves batches of tensors of the shape (batch_size x 4 (brain regions) x 829 (signature size))."""
-    for i in range(0, len(metadata), batch_size):
-        preprocessed = preprocess_for_logsig(metadata[i:i+batch_size], input_data_dir, scaler_type)
-        sigs = calculate_signature(preprocessed, truncation_level=5)
-        logsigs = calculate_logsignature(preprocessed, truncation_level=5)
-        # 829 is the size of the logsignature for 5 dimensions and a truncation level 5
-        logsigs = logsigs.reshape(-1,4,829)
-        np.save(f"{output_data_dir}logsigs_lvl_5_scaler_{scaler_type}_{i}.npy", logsigs)
-        if i % (10*batch_size) == 0:
-            print(f"Processed {i} records.")
-
-def calculate_signature_for_metadata(metadata, input_data_dir, output_data_dir, scaler_type, batch_size=100):
-    """Saves batches of tensors of the shape (batch_size x 4 (brain regions) x 3905 (signature size))."""
-    for i in range(0, len(metadata), batch_size):
-        preprocessed = preprocess_for_logsig(metadata[i:i+batch_size], input_data_dir, scaler_type)
-        sigs = calculate_signature(preprocessed, truncation_level=5)
-        # 3905 is the size of the signature for 5 dimensions
-        sigs = sigs.reshape(-1,4,3905)
-        np.save(f"{output_data_dir}sigs_lvl_5_scaler_{scaler_type}_{i}.npy", sigs)
-        if i % (10*batch_size) == 0:
-            print(f"Processed {i} records.")
