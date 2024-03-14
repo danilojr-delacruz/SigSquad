@@ -39,7 +39,11 @@ def modify_train_metadata(train_metadata):
     # - Same with the max
     # - Get the patient_id
     # - Then below we compute the expert vote distribution
-    train = train_metadata.groupby("eeg_id").agg(
+    train = train_metadata.copy()
+    num_votes = train.iloc[:, -6:].sum(axis=1)
+    train = train[num_votes >= 10]
+
+    train = train.groupby("eeg_id").agg(
         spectrogram_id     = pd.NamedAgg("spectrogram_id", "first"),
         min_offset_seconds = pd.NamedAgg("spectrogram_label_offset_seconds", "min"),
         max_offset_seconds = pd.NamedAgg("spectrogram_label_offset_seconds", "max"),
