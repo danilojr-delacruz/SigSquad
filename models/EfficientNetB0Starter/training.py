@@ -3,7 +3,7 @@ TRAIN_METADATA_DIR     = "../../train.csv"
 KAGGLE_SPECTROGRAM_DIR = "../../train_spectrograms/"
 EEG_SPECTROGRAM_DIR    = "../../EEG_Spectrograms"
 
-MODEL_DIR = "experts_only"
+MODEL_DIR = "experts_only_w_tuchilus"
 
 import os
 import pandas as pd
@@ -16,7 +16,7 @@ from sklearn.model_selection import GroupKFold
 
 from input_utils import modify_train_metadata, TrainDataset, ValidationDataset, \
     LazySpectrogramFetcher
-from model import KldClassifier, EfficientNetB0Starter
+from model import KldClassifier, TuchilusEfficientNetB0
 from constants import TARGETS
 
 NUM_FOLDS = 5
@@ -66,12 +66,12 @@ for i, (train_index, valid_index) in enumerate(
 
     print(f"Fold {i}")
     # Build model
-    enb0 = EfficientNetB0Starter()
+    tenb0 = TuchilusEfficientNetB0()
     # Restricting to only good samples, went down from 17k to 6k
     # So triple each epoch round so same number of training steps
     # The hard index stays the same though at 3177 so lets just keep it
     # hard round the same
-    model = KldClassifier(enb0, learning_rates=[
+    model = KldClassifier(tenb0, learning_rates=[
         1e-3, 1e-3, 1e-3,
         1e-3, 1e-3, 1e-3,
         1e-3, 1e-3, 1e-3,
