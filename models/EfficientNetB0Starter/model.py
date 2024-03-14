@@ -1,3 +1,4 @@
+import math
 import torch
 import lightning as pl
 from torchvision.models import efficientnet_b0
@@ -117,3 +118,23 @@ class TuchilusEfficientNetB0(torch.nn.Module):
                 M[position, j] = 0.5
 
         return M
+
+
+class MeanAggregator(torch.nn.Module):
+    def __init__(self, classifiers):
+        super().__init__()
+        self.num_classifiers = len(classifiers)
+        # TODO: Making these children nodes by setting as attributes
+        for i in range(self.num_classifiers):
+            setattr(self, f"classifier_{i}", classifiers[i])
+
+    def forward(self, x):
+        predictions_log = [getattr(self, f"classifier_{i}")(x)
+                           for i in range(self.num_classifiers)]
+        # TODO: Using math.log to avoid working doing
+        # torch.log(torch.tensor([self.num_classifiers]))
+        # Issue is that this will always be on CPU
+        mean_predictions_log = torch.logsumexp(
+            torch.stack(predictions_log), dim=0) - \
+            math.log(self.num_classifiers)
+        return mean_predictions_log
