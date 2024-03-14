@@ -125,7 +125,6 @@ def calculate_logsignature_for_metadata(metadata, input_data_dir, output_data_di
     """Saves batches of tensors of the shape (batch_size x 4 (brain regions) x 829 (signature size))."""
     for i in range(0, len(metadata), batch_size):
         preprocessed = preprocess_for_logsig(metadata[i:i+batch_size], input_data_dir, scaler_type)
-        sigs = calculate_signature(preprocessed, truncation_level=5)
         logsigs = calculate_logsignature(preprocessed, truncation_level=5)
         # 829 is the size of the logsignature for 5 dimensions and a truncation level 5
         logsigs = logsigs.reshape(-1,4,829)
