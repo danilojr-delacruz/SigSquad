@@ -3,7 +3,9 @@ TRAIN_METADATA_DIR     = "../../train.csv"
 KAGGLE_SPECTROGRAM_DIR = "../../train_spectrograms/"
 EEG_SPECTROGRAM_DIR    = "../../EEG_Spectrograms"
 
+MODEL_DIR = "experts_only"
 
+import os
 import pandas as pd
 import torch
 import lightning as pl
@@ -18,6 +20,8 @@ from model import KldClassifier, EfficientNetB0Starter
 from constants import TARGETS
 
 NUM_FOLDS = 5
+
+os.makedirs(MODEL_DIR, exist_ok=True)
 
 # 1. Obtain Metadata and Loaders -----------------------------------------------
 
@@ -63,14 +67,23 @@ for i, (train_index, valid_index) in enumerate(
     print(f"Fold {i}")
     # Build model
     enb0 = EfficientNetB0Starter()
+    # Restricting to only good samples, went down from 17k to 6k
+    # So triple each epoch round so same number of training steps
+    # The hard index stays the same though at 3177 so lets just keep it
+    # hard round the same
     model = KldClassifier(enb0, learning_rates=[
-        1e-3, 1e-3, 1e-3, 1e-4, 1e-5,
+        1e-3, 1e-3, 1e-3,
+        1e-3, 1e-3, 1e-3,
+        1e-3, 1e-3, 1e-3,
+        1e-4, 1e-4, 1e-4,
+        1e-5, 1e-5, 1e-5,
+        # Hard round
         1e-5, 1e-5, 1e-6
     ])
 
     # Train model
     print("Training on all data")
-    trainer = pl.Trainer(max_epochs=5, log_every_n_steps=1)
+    trainer = pl.Trainer(max_epochs=5*3, log_every_n_steps=1)
     train_loader = DataLoader(Subset(train_dataset, train_index),
                               batch_size=8, num_workers=15)
     trainer.fit(model=model, train_dataloaders=train_loader)
@@ -83,7 +96,7 @@ for i, (train_index, valid_index) in enumerate(
     trainer.fit(model=model, train_dataloaders=hard_train_loader)
 
     # Save weights
-    torch.save(model.state_dict(), f"model_weights/{i}.pt")
+    torch.save(model.state_dict(), f"{MODEL_DIR}/{i}.pt")
 
     val_loader = DataLoader(Subset(val_dataset, valid_index),
                             batch_size=8, num_workers=15, shuffle=False)
@@ -116,7 +129,7 @@ overall_oof_cv = torch.nn.functional.kl_div(
     torch.log(oof), true, reduction="batchmean"
 )
 
-with open(f"cv_scores.txt", "w") as f:
+with open(f"{MODEL_DIR}/cv_scores.txt", "w") as f:
     for i, cv_score in enumerate(oof_cv):
         f.write(f"Fold {i}, CV = {cv_score:.3f}\n")
     f.write(f"Overall CV Score = {overall_oof_cv:.3f}")
