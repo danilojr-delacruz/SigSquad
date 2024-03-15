@@ -1,0 +1,13 @@
+iisignature
+librosa
+lightning
+numpy
+pandas
+scikit_learn
+scipy
+torch
+torchvision
+tslearn
+matplotlib
+pyarrow
+signatory
