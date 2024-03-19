@@ -1,7 +1,6 @@
-iisignature
+numpy
 librosa
 lightning
-numpy
 pandas
 scikit_learn
 scipy
