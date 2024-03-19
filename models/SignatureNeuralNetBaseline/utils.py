@@ -1,9 +1,9 @@
-import signatory
 import numpy as np
 import pandas as pd
-import torch
 from tslearn.preprocessing import TimeSeriesScalerMinMax, TimeSeriesScalerMeanVariance
 from scipy.signal import butter, lfilter
+import signatory
+import torch
 
 RESIDUAL_PAIRS = {'LP': [('Fp1', 'F3'), ('F3', 'C3'), ('C3', 'P3'), ('P3', 'O1')], 
                   'RP': [('Fp2', 'F4'), ('F4', 'C4'), ('C4', 'P4'), ('P4', 'O2')], 
@@ -39,20 +39,24 @@ def modify_metadata(metadata):
     return metadata_grouped.reset_index()
 
 def rescale(ts, scaler_type):
-   """Rescale the time series using the given type.
-   """
-   if scaler_type == "minmax":
-      scaler = TimeSeriesScalerMinMax()
-      ts = scaler.fit_transform(ts)
-   elif scaler_type == "meanvar":
-      scaler = TimeSeriesScalerMeanVariance(std=0.2)
-      ts = scaler.fit_transform(ts)
-   elif scaler_type == "constant":
-      # since we clipped the data to -300, 300, this will force the data to have range 1
-      # this seems to help create well-behaved signatures (e.g. they have factorial decay)
-      # we might need to tune this constant if it doesn't work well
-      ts = ts / 600
-   return ts
+    """Rescale the time series using the given type.
+    """
+    if scaler_type == "minmax":
+        scaler = TimeSeriesScalerMinMax()
+        ts = scaler.fit_transform(ts)
+    elif scaler_type.startswith("meanvar"):
+        scaler_std = float(scaler_type.split("_")[1])
+        scaler = TimeSeriesScalerMeanVariance(std=scaler_std)
+        ts = scaler.fit_transform(ts)
+    elif scaler_type.startswith("constant"):
+        scaler_constant = float(scaler_type.split("_")[1])
+        # since we clipped the data to -300, 300, this will force the data to have range 1
+        # this seems to help create well-behaved signatures (e.g. they have factorial decay)
+        # we might need to tune this constant if it doesn't work well
+        ts = ts / scaler_constant
+    else:
+        raise ValueError(f"Unknown scaler type {scaler_type}")
+    return ts
 
 def transform_residuals(residuals, scaler_type):
     # clip roughly 3 standard deviations and above
@@ -121,24 +125,26 @@ def calculate_signature(preprocessed, truncation_level):
     signature = signatory.signature(preprocessed, truncation_level)
     return signature
 
-def calculate_signature_for_metadata_test(metadata, input_data_dir, scaler_type, device):
+def calculate_logsignature_for_metadata_test(metadata, input_data_dir, scaler_type, device="cpu", level=5):
     """Return the tensor of calculated signtures.
        Use this function to calculate the signatures for the kaggle test set.
     """
     preprocessed = preprocess_for_logsig(metadata, input_data_dir, scaler_type)
     preprocessed = torch.tensor(preprocessed, dtype=torch.float64).to(device)
-    sigs = calculate_signature(preprocessed, truncation_level=5).cpu()
-    # 3905 is the size of the signature for 5 dimensions
-    sigs = sigs.reshape(-1,4,3905)
-    return sigs
+    logsigs = calculate_logsignature(preprocessed, truncation_level=level).cpu()
+    size = logsigs.shape[1]
+    logsigs = logsigs.reshape(-1,4,size)
+    return logsigs
 
-def calculate_logsignature_for_metadata_test(metadata, input_data_dir, scaler_type, device):
-    """Return the tensor of calculated log signtures.
-       Use this function to calculate the log signatures for the kaggle test set.
+
+def calculate_signature_for_metadata_test(metadata, input_data_dir, scaler_type, device="cpu", level=5):
+    """Return the tensor of calculated signtures.
+       Use this function to calculate the signatures for the kaggle test set.
     """
     preprocessed = preprocess_for_logsig(metadata, input_data_dir, scaler_type)
     preprocessed = torch.tensor(preprocessed, dtype=torch.float64).to(device)
-    logsigs = calculate_logsignature(preprocessed, truncation_level=5).cpu()
-    # 829 is the size of the logsignature for 5 dimensions and a truncation level 5
-    logsigs = logsigs.reshape(-1,4,829)
-    return logsigs
+    sigs = calculate_signature(preprocessed, truncation_level=level).cpu()
+    size = sigs.shape[1]
+    sigs = sigs.reshape(-1,4,size)
+    return sigs
+
