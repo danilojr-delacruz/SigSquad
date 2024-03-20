@@ -1,5 +1,6 @@
 import torch
 from model import EnsembleModel
+import os
 
 
 def train(model, train_loader, test_loader, device, criterion, optimizer, early_stopping_epochs, max_epochs=100):
@@ -16,7 +17,7 @@ def train(model, train_loader, test_loader, device, criterion, optimizer, early_
             y_pred = model(X)
             loss = criterion(torch.log(y_pred), y)
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), 2)
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.5)
             optimizer.step()
             train_loss += loss.item()
         train_loss /= len(train_loader)
@@ -36,9 +37,14 @@ def train(model, train_loader, test_loader, device, criterion, optimizer, early_
         if epoch > early_stopping_epochs and test_losses[-1] > test_losses[-2]:
             break
 
-    return train_losses, test_losses
+        # if the loss is nan, break
+        if test_losses[-1] != test_losses[-1]:
+            print('Loss is nan')
+            break
 
-def CV_score(dataset, lr, weight_decay, dropout, classifier_input_dim, hidden_layer_dim, device, criterion, early_stopping_epochs, folds=5):
+    return train_losses, test_losses, model
+
+def CV_score(dataset, lr, weight_decay, dropout, classifier_input_dim, hidden_layer_dim, device, criterion, early_stopping_epochs, folds=5, save_models=False):
     """Train and evaluate the model for each data fold.
     """
     fold_size = len(dataset) // folds
@@ -51,6 +57,16 @@ def CV_score(dataset, lr, weight_decay, dropout, classifier_input_dim, hidden_la
         sig_dimension = dataset[0][0].shape[1]
         ensemble_model = EnsembleModel(sig_dimension, dropout, classifier_input_dim, hidden_layer_dim)
         optimizer = torch.optim.Adam(ensemble_model.parameters(), lr=lr, weight_decay=weight_decay)
-        train_losses, test_losses = train(ensemble_model, train_loader, test_loader, device, criterion, optimizer, early_stopping_epochs, max_epochs=100)
-        scores.append(test_losses[-1])
+        train_losses, test_losses, model = train(ensemble_model, train_loader, test_loader, device, criterion, optimizer, early_stopping_epochs, max_epochs=100)
+
+        if save_models:
+            # save the model parameters
+            folder_name = f"{lr}_{weight_decay}_{dropout}_{classifier_input_dim}_{hidden_layer_dim}"
+            if not os.path.exists(f"model_logs/{folder_name}"):
+                os.makedirs(f"model_logs/{folder_name}")
+            torch.save(model.state_dict(), f"model_logs/{folder_name}/model_{fold}.pt")
+        if test_losses[-1] != test_losses[-1]:
+            scores.append(test_losses[-2])
+        else:
+            scores.append(test_losses[-1])
     return scores

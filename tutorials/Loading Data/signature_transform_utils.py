@@ -50,9 +50,6 @@ def rescale(ts, scaler_type):
         ts = scaler.fit_transform(ts)
     elif scaler_type.startswith("constant"):
         scaler_constant = float(scaler_type.split("_")[1])
-        # since we clipped the data to -300, 300, this will force the data to have range 1
-        # this seems to help create well-behaved signatures (e.g. they have factorial decay)
-        # we might need to tune this constant if it doesn't work well
         ts = ts / scaler_constant
     else:
         raise ValueError(f"Unknown scaler type {scaler_type}")
@@ -93,7 +90,7 @@ def butter_bandpass_filter(data, lowcut=0.1, highcut=30, fs=200, order=4):
     y = lfilter(b, a, data, axis=0)
     return y
 
-def preprocess_for_logsig(metadata, data_dir, scaler_type):
+def preprocess_for_sig(metadata, data_dir, scaler_type):
     """"Preprocess the eeg data to feed into the logsignature function.
         The output tensor is of the shape (paths_to_calculate x  path_length = 10000 x path_dimensions = 5).
         paths to calculate = number_of_eeg_recordings * 4 brain regions for each recording.
@@ -102,7 +99,7 @@ def preprocess_for_logsig(metadata, data_dir, scaler_type):
     for i, data in metadata.iterrows():
         eeg_id = data.eeg_id
         # eeg is sampled at 200 Hz
-        offset = int(data.eeg_offset_seconds * 200)
+        offset = int(data.eeg_offset_seconds * 200 )
         parquet_path = (f"{data_dir}{eeg_id}.parquet")
         # clip roughly the top and bottom 1% of the data
         eeg = pd.read_parquet(parquet_path).fillna(0).clip(-1300,2800)
@@ -116,19 +113,17 @@ def preprocess_for_logsig(metadata, data_dir, scaler_type):
     return preprocessed
 
 def calculate_logsignature(preprocessed, truncation_level):
-    # assumes a 5 dimensional path
     logsignature = signatory.logsignature(preprocessed, truncation_level)
     return logsignature
 
 def calculate_signature(preprocessed, truncation_level):
-    # assumes a 5 dimensional path
     signature = signatory.signature(preprocessed, truncation_level)
     return signature
 
 def calculate_logsignature_for_metadata(metadata, input_data_dir, output_data_dir, scaler_type, batch_size=100, device="cpu", level=5):
-    """Saves batches of tensors of the shape (batch_size x 4 (brain regions) x 829 (signature size))."""
+    """Saves batches of tensors of the shape (batch_size x 4 (brain regions) x (signature size))."""
     for i in range(0, len(metadata), batch_size):
-        preprocessed = preprocess_for_logsig(metadata[i:i+batch_size], input_data_dir, scaler_type)
+        preprocessed = preprocess_for_sig(metadata[i:i+batch_size], input_data_dir, scaler_type)
         preprocessed = torch.tensor(preprocessed, dtype=torch.float64).to(device)
         logsigs = calculate_logsignature(preprocessed, truncation_level=level).cpu()
         size = logsigs.shape[1]
@@ -138,9 +133,9 @@ def calculate_logsignature_for_metadata(metadata, input_data_dir, output_data_di
             print(f"Processed {i} records.")
 
 def calculate_signature_for_metadata(metadata, input_data_dir, output_data_dir, scaler_type, batch_size=100, device="cpu", level=5):
-    """Saves batches of tensors of the shape (batch_size x 4 (brain regions) x 3905 (signature size))."""
+    """Saves batches of tensors of the shape (batch_size x 4 (brain regions) x (signature size))."""
     for i in range(0, len(metadata), batch_size):
-        preprocessed = preprocess_for_logsig(metadata[i:i+batch_size], input_data_dir, scaler_type)
+        preprocessed = preprocess_for_sig(metadata[i:i+batch_size], input_data_dir, scaler_type)
         preprocessed = torch.tensor(preprocessed, dtype=torch.float64).to(device)
         sigs = calculate_signature(preprocessed, truncation_level=level).cpu()
         size = sigs.shape[1]

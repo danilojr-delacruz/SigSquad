@@ -50,9 +50,6 @@ def rescale(ts, scaler_type):
         ts = scaler.fit_transform(ts)
     elif scaler_type.startswith("constant"):
         scaler_constant = float(scaler_type.split("_")[1])
-        # since we clipped the data to -300, 300, this will force the data to have range 1
-        # this seems to help create well-behaved signatures (e.g. they have factorial decay)
-        # we might need to tune this constant if it doesn't work well
         ts = ts / scaler_constant
     else:
         raise ValueError(f"Unknown scaler type {scaler_type}")
@@ -93,7 +90,7 @@ def butter_bandpass_filter(data, lowcut=0.1, highcut=30, fs=200, order=4):
     y = lfilter(b, a, data, axis=0)
     return y
 
-def preprocess_for_logsig(metadata, data_dir, scaler_type):
+def preprocess_for_sig(metadata, data_dir, scaler_type):
     """"Preprocess the eeg data to feed into the logsignature function.
         The output tensor is of the shape (paths_to_calculate x  path_length = 10000 x path_dimensions = 5).
         paths to calculate = number_of_eeg_recordings * 4 brain regions for each recording.
@@ -115,21 +112,33 @@ def preprocess_for_logsig(metadata, data_dir, scaler_type):
     
     return preprocessed
 
+def preprocess_for_sig_test(metadata, data_dir, scaler_type):
+    """Preprocessing needs to be different for the kaggle test set since we only have 50 second eeg recordings."""
+    preprocessed = []
+    for i, data in metadata.iterrows():
+        eeg_id = data.eeg_id
+        parquet_path = (f"{data_dir}{eeg_id}.parquet")
+        eeg = pd.read_parquet(parquet_path).fillna(0).clip(-1300,2800)
+        eeg = pd.DataFrame(butter_bandpass_filter(eeg), columns=eeg.columns)
+        residuals = get_residuals(eeg, scaler_type)      
+        preprocessed.append(residuals)
+    preprocessed = np.concatenate(preprocessed, axis=0)
+
+    return preprocessed
+
 def calculate_logsignature(preprocessed, truncation_level):
-    # assumes a 5 dimensional path
     logsignature = signatory.logsignature(preprocessed, truncation_level)
     return logsignature
 
 def calculate_signature(preprocessed, truncation_level):
-    # assumes a 5 dimensional path
     signature = signatory.signature(preprocessed, truncation_level)
     return signature
 
 def calculate_logsignature_for_metadata_test(metadata, input_data_dir, scaler_type, device="cpu", level=5):
     """Return the tensor of calculated signtures.
-       Use this function to calculate the signatures for the kaggle test set.
+       Use this function to calculate the logsignatures for the kaggle test set.
     """
-    preprocessed = preprocess_for_logsig(metadata, input_data_dir, scaler_type)
+    preprocessed = preprocess_for_sig_test(metadata, input_data_dir, scaler_type)
     preprocessed = torch.tensor(preprocessed, dtype=torch.float64).to(device)
     logsigs = calculate_logsignature(preprocessed, truncation_level=level).cpu()
     size = logsigs.shape[1]
@@ -141,7 +150,7 @@ def calculate_signature_for_metadata_test(metadata, input_data_dir, scaler_type,
     """Return the tensor of calculated signtures.
        Use this function to calculate the signatures for the kaggle test set.
     """
-    preprocessed = preprocess_for_logsig(metadata, input_data_dir, scaler_type)
+    preprocessed = preprocess_for_sig_test(metadata, input_data_dir, scaler_type)
     preprocessed = torch.tensor(preprocessed, dtype=torch.float64).to(device)
     sigs = calculate_signature(preprocessed, truncation_level=level).cpu()
     size = sigs.shape[1]
