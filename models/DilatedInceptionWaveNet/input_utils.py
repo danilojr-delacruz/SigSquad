@@ -143,7 +143,7 @@ class TrainDataset(Dataset):
         # and is exactly 50 seconds long.
         # True for the test case, but limiting for training.
         X = self.transform(self.fetcher.get_eeg(eeg_id))
-        y = row[TARGETS]
+        y = row[TARGETS].values.astype(float)
 
         # Convert into tensors
         X = torch.tensor(X, dtype=torch.float32)
