@@ -1,0 +1,28 @@
+TARGETS = [
+    "seizure_vote",	"lpd_vote", "gpd_vote",
+    "lrda_vote", "grda_vote", "other_vote"
+    ]
+
+# This gives the mapping between labels and their class id
+LABEL_TO_ID = {
+    "Seizure":0, "LPD" :1, "GPD"  :2,
+    "LRDA"   :3, "GRDA":4, "Other":5
+}
+ID_TO_LABEL = {x:y for y,x in LABEL_TO_ID.items()}
+
+
+EEG_SAMPLING_RATE_HZ = 200
+EEG_SNAPSHOT_DURATION_SECONDS = 50
+EEG_SNAPSHOT_DURATION = EEG_SNAPSHOT_DURATION_SECONDS * EEG_SAMPLING_RATE_HZ
+
+SPECTROGRAM_SAMPLING_RATE_HZ = 0.5
+SPECTROGRAM_SNAPSHOT_DURATION_SECONDS = 600
+SPECTROGRAM_SNAPSHOT_DURATION = int(SPECTROGRAM_SNAPSHOT_DURATION_SECONDS * SPECTROGRAM_SAMPLING_RATE_HZ)
+
+NUM_BRAIN_REGIONS = 4
+NUM_SPECTROGRAM_FREQUENCIES = 100
+
+CHANNELS = ['Fp1','T3','C3','O1','Fp2','C4','T4','O2']
+NUM_CHANNELS = len(CHANNELS)
+
+FEAT2CODE = {f: i for i, f in enumerate(CHANNELS)}
