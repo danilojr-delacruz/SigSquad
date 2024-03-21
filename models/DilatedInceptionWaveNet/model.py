@@ -187,13 +187,12 @@ class DilatedInceptionWaveNet(torch.nn.Module):
             torch.nn.LogSoftmax(dim=1)
         )
 
-    def forward(self, inputs):
+    def forward(self, x):
         """Forward pass.
 
         Shape:
             x: (B, L, C)
         """
-        x = inputs["x"]
         bs, length, in_dim = x.shape
         x = x.transpose(1, 2).unsqueeze(dim=2)  # (B, C, N, L), N is redundant
 
