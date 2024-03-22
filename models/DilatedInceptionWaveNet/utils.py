@@ -46,3 +46,38 @@ def mu_law_encoding(data, mu):
     mu_x = np.sign(data) * np.log(1 + mu * np.abs(data)) / np.log(mu + 1)
 
     return mu_x
+
+
+def eeg_preprocessing_transform(x):
+    """Assumed the shape is (L, C)"""
+    # Replace any 9999 filler value into nan
+    x = x.copy()
+    x[x == 9999] = np.nan
+
+    # Change into Double Banana Montage
+    x = montage_difference(x)
+
+    # Centre at 0
+    # Shape is (1, C')
+    median_x = np.median(x, axis=0)[:, None]
+    x = x - median_x
+
+    # Standard Preprocessing
+    x = np.clip(x, -1024, 1024)
+    x = np.nan_to_num(x, nan=0)
+
+    # TODO: Don't want to perform instance normalisation
+    # Want to be able to compare between EEGs
+    x = x / 32.0
+
+    # Filter frequencies above 20 Hz
+    x = butter_lowpass_filter(x)
+
+    # TODO: Do not perform mu law encoding yet
+    # x = mu_law_encoding(x)
+
+    # Down sample
+    downsampling_rate = 5
+    x = x[::downsampling_rate, :]
+
+    return x

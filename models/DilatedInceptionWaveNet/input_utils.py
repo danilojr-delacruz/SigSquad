@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 from torch.utils.data import Dataset
 
-from utils import montage_difference, butter_lowpass_filter, mu_law_encoding
+from utils import eeg_preprocessing_transform
 from constants import TARGETS, CHANNELS, NUM_CHANNELS, EEG_SNAPSHOT_DURATION
 
 
@@ -113,38 +113,7 @@ class TrainDataset(Dataset):
 
     @staticmethod
     def transform(x):
-        """Assumed the shape is (L, C)"""
-        # Replace any 9999 filler value into nan
-        x = x.copy()
-        x[x == 9999] = np.nan
-
-        # Change into Double Banana Montage
-        x = montage_difference(x)
-
-        # Centre at 0
-        # Shape is (1, C')
-        median_x = np.median(x, axis=0)[:, None]
-        x = x - median_x
-
-        # Standard Preprocessing
-        x = np.clip(x, -1024, 1024)
-        x = np.nan_to_num(x, nan=0)
-
-        # TODO: Don't want to perform instance normalisation
-        # Want to be able to compare between EEGs
-        x = x / 32.0
-
-        # Filter frequencies above 20 Hz
-        x = butter_lowpass_filter(x)
-
-        # TODO: Do not perform mu law encoding yet
-        # x = mu_law_encoding(x)
-
-        # Down sample
-        downsampling_rate = 5
-        x = x[::downsampling_rate, :]
-
-        return x
+        return eeg_preprocessing_transform(x)
 
     def __getitem__(self, idx):
         """Assuming idx is an int."""
@@ -195,24 +164,7 @@ class TestDataset(Dataset):
 
     @staticmethod
     def transform(x):
-        """Assumed the shape is (L, C)"""
-        # Change into Double Banana Montage
-        x = montage_difference(x)
-
-        # Standard Preprocessing
-        x = np.clip(x, -1024, 1024)
-        x = np.nan_to_num(x, nan=0) / 32.0
-
-        # Filter frequencies above 20 Hz
-        x = butter_lowpass_filter(x)
-
-        # TODO: Do not perform mu law encoding
-
-        # Down sample
-        downsampling_rate = 5
-        x = x[::downsampling_rate, :]
-
-        return x
+        return eeg_preprocessing_transform(x)
 
     def __getitem__(self, idx):
         """Assuming idx is an int."""
