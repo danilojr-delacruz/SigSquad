@@ -49,6 +49,8 @@ def CV_score(dataset, lr, weight_decay, dropout, classifier_input_dim, hidden_la
     """
     fold_size = len(dataset) // folds
     scores = []
+    train_losses = []
+    test_losses = []
     for fold in range(folds):
         train_dataset = torch.utils.data.Subset(dataset, list(range(0, fold*fold_size)) + list(range((fold+1)*fold_size, len(dataset))))
         test_dataset = torch.utils.data.Subset(dataset, list(range(fold*fold_size, (fold+1)*fold_size)))
@@ -57,7 +59,9 @@ def CV_score(dataset, lr, weight_decay, dropout, classifier_input_dim, hidden_la
         sig_dimension = dataset[0][0].shape[1]
         ensemble_model = EnsembleModel(sig_dimension, dropout, classifier_input_dim, hidden_layer_dim)
         optimizer = torch.optim.Adam(ensemble_model.parameters(), lr=lr, weight_decay=weight_decay)
-        train_losses, test_losses, model = train(ensemble_model, train_loader, test_loader, device, criterion, optimizer, early_stopping_epochs, max_epochs=100)
+        train_loss, test_loss, model = train(ensemble_model, train_loader, test_loader, device, criterion, optimizer, early_stopping_epochs, max_epochs=100)
+        train_losses.append(train_loss)
+        test_losses.append(test_loss)
 
         if save_models:
             # save the model parameters
@@ -65,8 +69,8 @@ def CV_score(dataset, lr, weight_decay, dropout, classifier_input_dim, hidden_la
             if not os.path.exists(f"model_logs/{folder_name}"):
                 os.makedirs(f"model_logs/{folder_name}")
             torch.save(model.state_dict(), f"model_logs/{folder_name}/model_{fold}.pt")
-        if test_losses[-1] != test_losses[-1]:
-            scores.append(test_losses[-2])
+        if test_loss[-1] != test_loss[-1]:
+            scores.append(test_loss[-2])
         else:
-            scores.append(test_losses[-1])
-    return scores
+            scores.append(test_loss[-1])
+    return scores, train_losses, test_losses

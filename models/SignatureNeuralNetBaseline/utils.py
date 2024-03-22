@@ -23,6 +23,8 @@ def modify_metadata(metadata):
        Make the toal vote distribution across the reconding be the target.
        We are assuming that even though we have multiple sub-recordings, the true target value does not change.
     """
+    num_votes = metadata.iloc[:, -6:].sum(axis=1)
+    metadata = metadata[(num_votes >= 10)]
     # note that other public notebooks calculate the offset differently, but I am not convinced it makes sense
     metadata_grouped = metadata.groupby("eeg_id").agg(
         spectrogram_id     = pd.NamedAgg("spectrogram_id", "first"),
@@ -56,8 +58,8 @@ def rescale(ts, scaler_type):
     return ts
 
 def transform_residuals(residuals, scaler_type):
-    # clip roughly 3 standard deviations and above
-    residuals = np.clip(residuals, -300, 300)
+    # clip very large outliers for the minmax scaler
+    residuals = np.clip(residuals, -150, 150)
     residuals = rescale(residuals.values.reshape(1,-1,1), scaler_type).reshape(-1)
     return residuals
 
@@ -99,13 +101,13 @@ def preprocess_for_sig(metadata, data_dir, scaler_type):
     for i, data in metadata.iterrows():
         eeg_id = data.eeg_id
         # eeg is sampled at 200 Hz
-        offset = int(data.eeg_offset_seconds * 200)
+        offset = int(data.eeg_offset_seconds * 200 )
         parquet_path = (f"{data_dir}{eeg_id}.parquet")
-        # clip roughly the top and bottom 1% of the data
-        eeg = pd.read_parquet(parquet_path).fillna(0).clip(-1300,2800)
+        # clip outliers (eeg amplitudes are in the range of -100 to 100)
+        eeg = pd.read_parquet(parquet_path).fillna(0).clip(-100,100)
+        eeg = eeg.iloc[offset:offset+10000]
         # bandpass filter
         eeg = pd.DataFrame(butter_bandpass_filter(eeg), columns=eeg.columns)
-        eeg = eeg.iloc[offset:offset+10000]
         residuals = get_residuals(eeg, scaler_type)      
         preprocessed.append(residuals)
     preprocessed = np.concatenate(preprocessed, axis=0)
@@ -118,7 +120,7 @@ def preprocess_for_sig_test(metadata, data_dir, scaler_type):
     for i, data in metadata.iterrows():
         eeg_id = data.eeg_id
         parquet_path = (f"{data_dir}{eeg_id}.parquet")
-        eeg = pd.read_parquet(parquet_path).fillna(0).clip(-1300,2800)
+        eeg = pd.read_parquet(parquet_path).fillna(0).clip(-100,100)
         eeg = pd.DataFrame(butter_bandpass_filter(eeg), columns=eeg.columns)
         residuals = get_residuals(eeg, scaler_type)      
         preprocessed.append(residuals)

@@ -15,7 +15,11 @@ class TrainDataset(Dataset):
         # fill na
         features = torch.nan_to_num(features)
         # normalize features
-        features = (features - torch.mean(features, axis=0)) / (torch.std(features, axis=0) + 1e-6)
+        self.mean = torch.mean(features, axis=[0,1])
+        self.std = torch.std(features, axis=[0,1])
+        features = (features - self.mean) / (self.std + 1e-6)
+
+
         features = torch.clamp(features, -3, 3)
 
         return features.to(torch.float32)
@@ -30,16 +34,18 @@ class TrainDataset(Dataset):
     
 class KaggleTestDataset(Dataset):
     """Labels are not available"""
-    def __init__(self, metadata, features):
+    def __init__(self, metadata, features, mean, std):
         self.metadata = metadata
-        self.features = self.preprocess_features(features)
+        self.mean = mean
+        self.std = std
+        self.features = self.preprocess_features(features, mean, std)
 
-    def preprocess_features(self, features):
+
+    def preprocess_features(self, features, mean, std):
         # fill na
         features = torch.nan_to_num(features)
         # normalize features
-        # TODO: precompute mean and std instead of this
-        features = (features - torch.mean(features, axis=0)) / (torch.std(features, axis=0) + 1e-6)
+        features = (features - mean) / (std + 1e-6)
         features = torch.clamp(features, -3, 3)
 
         return features.to(torch.float32)
