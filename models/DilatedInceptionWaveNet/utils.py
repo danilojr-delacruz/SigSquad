@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 
 from scipy.signal import butter, lfilter
+
 from constants import EEG_SNAPSHOT_DURATION, NUM_CHANNELS, FEAT2CODE
 
 
