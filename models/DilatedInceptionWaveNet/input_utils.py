@@ -121,9 +121,18 @@ class TrainDataset(Dataset):
         # Change into Double Banana Montage
         x = montage_difference(x)
 
+        # Centre at 0
+        # Shape is (1, C')
+        median_x = np.median(x, axis=0)[:, None]
+        x = x - median_x
+
         # Standard Preprocessing
         x = np.clip(x, -1024, 1024)
-        x = np.nan_to_num(x, nan=0) / 32.0
+        x = np.nan_to_num(x, nan=0)
+
+        # TODO: Don't want to perform instance normalisation
+        # Want to be able to compare between EEGs
+        x = x / 32.0
 
         # Filter frequencies above 20 Hz
         x = butter_lowpass_filter(x)
