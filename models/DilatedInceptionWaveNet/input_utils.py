@@ -114,6 +114,10 @@ class TrainDataset(Dataset):
     @staticmethod
     def transform(x):
         """Assumed the shape is (L, C)"""
+        # Replace any 9999 filler value into nan
+        x = x.copy()
+        x[x == 9999] = np.nan
+
         # Change into Double Banana Montage
         x = montage_difference(x)
 
