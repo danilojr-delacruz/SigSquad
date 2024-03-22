@@ -60,7 +60,7 @@ def eeg_preprocessing_transform(x):
 
     # Centre at 0
     # Shape is (1, C')
-    median_x = np.median(x, axis=0)[:, None]
+    median_x = np.median(x, axis=0)[None, :]
     x = x - median_x
 
     # Standard Preprocessing
