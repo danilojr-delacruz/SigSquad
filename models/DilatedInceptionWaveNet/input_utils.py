@@ -28,14 +28,6 @@ def get_eeg_window(file):
     eeg_win = np.zeros((EEG_SNAPSHOT_DURATION, NUM_CHANNELS))
     for j, col in enumerate(CHANNELS):
         eeg_raw = eeg[col].values.astype("float32")
-
-        # Fill missing values
-        mean = np.nanmean(eeg_raw)
-        if np.isnan(eeg_raw).mean() < 1:
-            eeg_raw = np.nan_to_num(eeg_raw, nan=mean)
-        else:
-            # All missing
-            eeg_raw[:] = 0
         eeg_win[:, j] = eeg_raw
 
     return eeg_win
