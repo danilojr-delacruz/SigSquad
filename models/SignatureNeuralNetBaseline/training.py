@@ -44,7 +44,7 @@ def train(model, train_loader, test_loader, device, criterion, optimizer, early_
 
     return train_losses, test_losses, model
 
-def CV_score(dataset, lr, weight_decay, dropout, classifier_input_dim, hidden_layer_dim, device, criterion, early_stopping_epochs, folds=5, save_models=False):
+def CV_score(dataset, weights, lr, weight_decay, dropout, classifier_input_dim, hidden_layer_dim, device, criterion, early_stopping_epochs, folds=5, save_models=False):
     """Train and evaluate the model for each data fold.
     """
     fold_size = len(dataset) // folds
@@ -54,7 +54,8 @@ def CV_score(dataset, lr, weight_decay, dropout, classifier_input_dim, hidden_la
     for fold in range(folds):
         train_dataset = torch.utils.data.Subset(dataset, list(range(0, fold*fold_size)) + list(range((fold+1)*fold_size, len(dataset))))
         test_dataset = torch.utils.data.Subset(dataset, list(range(fold*fold_size, (fold+1)*fold_size)))
-        train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=32, shuffle=True)
+        sampler = torch.utils.data.WeightedRandomSampler(weights[:fold*fold_size] + weights[(fold+1)*fold_size:], len(train_dataset), replacement=True)
+        train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=32, sampler=sampler)
         test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=fold_size, shuffle=False)
         sig_dimension = dataset[0][0].shape[1]
         ensemble_model = EnsembleModel(sig_dimension, dropout, classifier_input_dim, hidden_layer_dim)
