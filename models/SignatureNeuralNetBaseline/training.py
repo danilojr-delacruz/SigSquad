@@ -1,6 +1,8 @@
 import torch
 from model import EnsembleModel
 import os
+from input_utils import TrainDataset, TestDataset
+from sklearn.model_selection import GroupKFold
 
 
 def train(model, train_loader, test_loader, device, criterion, optimizer, early_stopping_epochs, max_epochs=100):
@@ -44,20 +46,25 @@ def train(model, train_loader, test_loader, device, criterion, optimizer, early_
 
     return train_losses, test_losses, model
 
-def CV_score(dataset, weights, lr, weight_decay, dropout, classifier_input_dim, hidden_layer_dim, device, criterion, early_stopping_epochs, folds=5, save_models=False):
+def CV_score(metadata, signature_features, weights, lr, weight_decay, dropout, classifier_input_dim, hidden_layer_dim, device, criterion, early_stopping_epochs, folds=5, save_models=False):
     """Train and evaluate the model for each data fold.
     """
-    fold_size = len(dataset) // folds
     scores = []
     train_losses = []
     test_losses = []
-    for fold in range(folds):
-        train_dataset = torch.utils.data.Subset(dataset, list(range(0, fold*fold_size)) + list(range((fold+1)*fold_size, len(dataset))))
-        test_dataset = torch.utils.data.Subset(dataset, list(range(fold*fold_size, (fold+1)*fold_size)))
-        sampler = torch.utils.data.WeightedRandomSampler(weights[:fold*fold_size] + weights[(fold+1)*fold_size:], len(train_dataset), replacement=True)
-        train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=32, sampler=sampler)
-        test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=fold_size, shuffle=False)
-        sig_dimension = dataset[0][0].shape[1]
+    gkf = GroupKFold(n_splits=5)
+    for i, (train_index, valid_index) in enumerate(gkf.split(metadata, metadata.target, metadata.patient_id)):
+        train_metadata = metadata.iloc[train_index]
+        test_metadata = metadata.iloc[valid_index]
+        train_signature_features = torch.index_select(signature_features, 0, torch.tensor(train_index))
+        test_signature_features = torch.index_select(signature_features, 0, torch.tensor(valid_index))
+        train_dataset = TrainDataset(train_metadata, train_signature_features)
+        train_mean = train_dataset.mean
+        train_std = train_dataset.std
+        test_dataset = TestDataset(test_metadata, test_signature_features, train_mean, train_std)
+        train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=32, shuffle=True)
+        test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=len(test_metadata), shuffle=False)
+        sig_dimension = train_dataset[0][0].shape[1]
         ensemble_model = EnsembleModel(sig_dimension, dropout, classifier_input_dim, hidden_layer_dim)
         optimizer = torch.optim.Adam(ensemble_model.parameters(), lr=lr, weight_decay=weight_decay)
         train_loss, test_loss, model = train(ensemble_model, train_loader, test_loader, device, criterion, optimizer, early_stopping_epochs, max_epochs=100)
@@ -69,7 +76,10 @@ def CV_score(dataset, weights, lr, weight_decay, dropout, classifier_input_dim, 
             folder_name = f"{lr}_{weight_decay}_{dropout}_{classifier_input_dim}_{hidden_layer_dim}"
             if not os.path.exists(f"model_logs/{folder_name}"):
                 os.makedirs(f"model_logs/{folder_name}")
-            torch.save(model.state_dict(), f"model_logs/{folder_name}/model_{fold}.pt")
+            torch.save(model.state_dict(), f"model_logs/{folder_name}/model_{i}.pt")
+            # save the mean and std of feature scaling
+            torch.save(train_mean, f"model_logs/{folder_name}/train_mean_{i}.pt")
+            torch.save(train_std, f"model_logs/{folder_name}/train_std_{i}.pt")
         if test_loss[-1] != test_loss[-1]:
             scores.append(test_loss[-2])
         else:

@@ -49,7 +49,7 @@ def rescale(ts, scaler_type):
     elif scaler_type.startswith("meanvarPerChannel"):
         scaler_std = float(scaler_type.split("_")[1])
         scaler = TimeSeriesScalerMeanVariance(std=scaler_std)
-        ts = ts - ts.mean(axis=1, keepdims=True)
+        ts = scaler.fit_transform(ts, std=scaler_std)
     elif scaler_type.startswith("constant"):
         scaler_constant = float(scaler_type.split("_")[1])
         ts = ts / scaler_constant
@@ -116,7 +116,7 @@ def preprocess_for_sig(metadata, data_dir, scaler_type):
         eeg = pd.read_parquet(parquet_path)
         # replace 9999 with 0
         eeg = eeg.replace(9999, 0)
-        eeg = eeg.fillna(0).clip(-300,300)
+        eeg = eeg.fillna(0).clip(-1000,1000)
         eeg = eeg.iloc[offset:offset+10000]
         # bandpass filter
         eeg = pd.DataFrame(butter_bandpass_filter(eeg), columns=eeg.columns)
