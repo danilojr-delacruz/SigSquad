@@ -27,9 +27,9 @@ class EnsembleModel(torch.nn.Module):
             outputs.append(self.model(x[:, i, :]))
         return self.classifier(torch.cat(outputs, axis=1))
     
-class LinearModel(torch.nn.Module):
+class FlatModel(torch.nn.Module):
     def __init__(self, sig_dimension, dropout, classifier_input_dim, hidden_layer_dim):
-        super(LinearModel, self).__init__()
+        super(FlatModel, self).__init__()
         self.model = torch.nn.Sequential(
             torch.nn.Linear(sig_dimension*4, hidden_layer_dim),
             torch.nn.BatchNorm1d(hidden_layer_dim),
