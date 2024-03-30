@@ -64,42 +64,30 @@ def transform_residuals(residuals, scaler_type):
     residuals = rescale(residuals.values.reshape(1,-1,1), scaler_type).reshape(-1)
     return residuals
 
-def get_residuals(eeg, scaler_type, group_by_region):
+def get_residuals(eeg, scaler_type):
     """Doctors look at the difference between two neighboring channels.
        Calculate the residuals for each channel pair.
-       Group by brain region.
-       The group_by_region flag is used to determine whether we want to take a signature of the whole 16-dimensional time series or group by region."""
-    if group_by_region:
-        brain_regions = []
-        for region, pair in RESIDUAL_PAIRS.items():
-            # include time as the first dimension and make it go from 0 to 1
-            residuals = []
-            for channel1, channel2 in pair:
-                residual = transform_residuals(eeg[channel1] - eeg[channel2], scaler_type)
-                residuals.append(residual)
-            brain_regions.append(np.stack(residuals).T)
-        brain_regions = np.stack(brain_regions)
-    else:
-        brain_regions = []
-        for region, pair in RESIDUAL_PAIRS.items():
-            for channel1, channel2 in pair:
-                residual = transform_residuals(eeg[channel1] - eeg[channel2], scaler_type)
-                brain_regions.append(residual)
-        brain_regions = np.stack(brain_regions).T
+       Group by brain region."""
+    brain_regions = []
+    for region, pair in RESIDUAL_PAIRS.items():
+        # include time as the first dimension and make it go from 0 to 1
+        residuals = []
+        for channel1, channel2 in pair:
+            residual = transform_residuals(eeg[channel1] - eeg[channel2], scaler_type)
+            residuals.append(residual)
+        brain_regions.append(np.stack(residuals).T)
+    brain_regions = np.stack(brain_regions)
 
     if scaler_type.startswith("meanvar"):
         brain_regions = brain_regions - brain_regions.mean(axis=1, keepdims=True)
         brain_regions = brain_regions / (brain_regions.std()+1e-6)
     return brain_regions.clip(-4, 4)
 
-def augment_with_time(residuals, group_by_region=True):
+def augment_with_time(residuals):
     """ take residuals of the shape (4, 10000, 4) and augment with time to obtain (4, 10000, 5)"""
-    if group_by_region:
-        augmented_regions = []
-        for region_index in range(4):
-            augmented_regions.append(np.concatenate([residuals[region_index], np.linspace(0,1,10000).reshape(-1,1)], axis=1))
-    else:
-        augmented_regions = [np.concatenate([residuals, np.linspace(0,1,10000).reshape(-1,1)], axis=1)]
+    augmented_regions = []
+    for region_index in range(4):
+        augmented_regions.append(np.concatenate([residuals[region_index], np.linspace(0,1,10000).reshape(-1,1)], axis=1))
     return np.stack(augmented_regions)
 
 def butter_bandpass(lowcut, highcut, fs, order):
@@ -114,7 +102,7 @@ def butter_bandpass_filter(data, lowcut=0.1, highcut=30, fs=200, order=4):
     y = lfilter(b, a, data, axis=0)
     return y
 
-def preprocess_for_sig(metadata, data_dir, scaler_type, group_by_region=True):
+def preprocess_for_sig(metadata, data_dir, scaler_type):
     """"Preprocess the eeg data to feed into the logsignature function.
         The output tensor is of the shape (paths_to_calculate x  path_length = 10000 x path_dimensions = 5).
         paths to calculate = number_of_eeg_recordings * 4 brain regions for each recording.
@@ -132,11 +120,29 @@ def preprocess_for_sig(metadata, data_dir, scaler_type, group_by_region=True):
         eeg = eeg.iloc[offset:offset+10000]
         # bandpass filter
         eeg = pd.DataFrame(butter_bandpass_filter(eeg), columns=eeg.columns)
-        residuals = get_residuals(eeg, scaler_type, group_by_region)
-        residuals = augment_with_time(residuals, group_by_region)      
+        residuals = get_residuals(eeg, scaler_type)
+        residuals = augment_with_time(residuals)      
         preprocessed.append(residuals)
     preprocessed = np.concatenate(preprocessed, axis=0)
     
+    return preprocessed
+
+def preprocess_for_sig_test(metadata, data_dir, scaler_type):
+    """Preprocessing needs to be different for the kaggle test set since we only have 50 second eeg recordings."""
+    preprocessed = []
+    for i, data in metadata.iterrows():
+        eeg_id = data.eeg_id
+        parquet_path = (f"{data_dir}{eeg_id}.parquet")
+        eeg = pd.read_parquet(parquet_path)
+        # replace 9999 with 0
+        eeg = eeg.replace(9999, 0)
+        eeg = eeg.fillna(0).clip(-1000,1000)
+        eeg = pd.DataFrame(butter_bandpass_filter(eeg), columns=eeg.columns)
+        residuals = get_residuals(eeg, scaler_type)
+        residuals = augment_with_time(residuals)      
+        preprocessed.append(residuals)
+    preprocessed = np.concatenate(preprocessed, axis=0)
+
     return preprocessed
 
 def calculate_logsignature(preprocessed, truncation_level):
@@ -147,36 +153,26 @@ def calculate_signature(preprocessed, truncation_level):
     signature = signatory.signature(preprocessed, truncation_level)
     return signature
 
-def calculate_logsignature_for_metadata(metadata, input_data_dir, output_data_dir, scaler_type, batch_size=100, device="cpu", level=5):
-    """Saves batches of tensors of the shape (batch_size x 4 (brain regions) x (signature size))."""
-    for i in range(0, len(metadata), batch_size):
-        preprocessed = preprocess_for_sig(metadata[i:i+batch_size], input_data_dir, scaler_type)
-        preprocessed = torch.tensor(preprocessed, dtype=torch.float64).to(device)
-        logsigs = calculate_logsignature(preprocessed, truncation_level=level).cpu()
-        size = logsigs.shape[1]
-        logsigs = logsigs.reshape(-1,4,size)
-        torch.save(logsigs, f"{output_data_dir}logsigs_lvl_{level}_scaler_{scaler_type}_{i}.pt")
-        if i % (batch_size) == 0:
-            print(f"Processed {i} records.")
+def calculate_logsignature_for_metadata_test(metadata, input_data_dir, scaler_type, device="cpu", level=5):
+    """Return the tensor of calculated signtures.
+       Use this function to calculate the logsignatures for the kaggle test set.
+    """
+    preprocessed = preprocess_for_sig_test(metadata, input_data_dir, scaler_type)
+    preprocessed = torch.tensor(preprocessed, dtype=torch.float64).to(device)
+    logsigs = calculate_logsignature(preprocessed, truncation_level=level).cpu()
+    size = logsigs.shape[1]
+    logsigs = logsigs.reshape(-1,4,size)
+    return logsigs
 
-def calculate_signature_for_metadata(metadata, input_data_dir, output_data_dir, scaler_type, batch_size=100, device="cpu", level=5):
-    """Saves batches of tensors of the shape (batch_size x 4 (brain regions) x (signature size))."""
-    for i in range(0, len(metadata), batch_size):
-        preprocessed = preprocess_for_sig(metadata[i:i+batch_size], input_data_dir, scaler_type)
-        preprocessed = torch.tensor(preprocessed, dtype=torch.float64).to(device)
-        sigs = calculate_signature(preprocessed, truncation_level=level).cpu()
-        size = sigs.shape[1]
-        sigs = sigs.reshape(-1,4,size)
-        torch.save(sigs, f"{output_data_dir}sigs_lvl_{level}_scaler_{scaler_type}_{i}.pt")
-        if i % (batch_size) == 0:
-            print(f"Processed {i} records.")
 
-def calculate_signature_for_metadata_16_dim(metadata, input_data_dir, output_data_dir, scaler_type, batch_size=100, device="cpu", level=5):
-    """Instead of computing the signature for each brain region separately, we compute one big signature."""
-    for i in range(0, len(metadata), batch_size):
-        preprocessed = preprocess_for_sig(metadata[i:i+batch_size], input_data_dir, scaler_type, group_by_region=False)
-        preprocessed = torch.tensor(preprocessed, dtype=torch.float64).to(device)
-        sigs = calculate_signature(preprocessed, truncation_level=level).cpu()
-        torch.save(sigs, f"{output_data_dir}sigs_lvl_{level}_scaler_{scaler_type}_{i}_16_dim.pt")
-        if i % (batch_size) == 0:
-            print(f"Processed {i} records.")
+def calculate_signature_for_metadata_test(metadata, input_data_dir, scaler_type, device="cpu", level=5):
+    """Return the tensor of calculated signtures.
+       Use this function to calculate the signatures for the kaggle test set.
+    """
+    preprocessed = preprocess_for_sig_test(metadata, input_data_dir, scaler_type)
+    preprocessed = torch.tensor(preprocessed, dtype=torch.float64).to(device)
+    sigs = calculate_signature(preprocessed, truncation_level=level).cpu()
+    size = sigs.shape[1]
+    sigs = sigs.reshape(-1,4,size)
+    return sigs
+
