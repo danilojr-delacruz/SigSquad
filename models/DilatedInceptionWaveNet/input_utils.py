@@ -1,3 +1,4 @@
+import os
 import torch
 import numpy as np
 import pandas as pd
@@ -32,11 +33,27 @@ def get_eeg_window(file):
 
     return eeg_win
 
+# Everything will be much faster if you can do the preprocessing in batch mode.
+# For training, preprocess the data especially these scipy filtering things.
+
 
 # For training good if we can preload
 # But for inference it is not necessary as we are only making one pass
-def preload_precomputed_eeg(eeg_dir):
-    eegs = np.load(eeg_dir, allow_pickle=True).item()
+def preload_precomputed_eeg(eeg_dict_dir):
+    eegs = np.load(eeg_dict_dir, allow_pickle=True).item()
+    return eegs
+
+
+def precompute_eeg(eeg_dir):
+    filenames = os.listdir(eeg_dir)
+    # Going to assume they are all of the same length of 10_000
+    eegs = {}
+    for filename in filenames:
+        eeg = get_eeg_window(f"{eeg_dir}/{filename}")
+        # Filenames look like 12345.parquet
+        name = int(filename.split(".")[0])
+        eegs[name] = eeg
+
     return eegs
 
 

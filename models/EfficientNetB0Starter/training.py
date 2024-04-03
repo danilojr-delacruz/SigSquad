@@ -1,7 +1,7 @@
 # Contains all of the eegs together in one file - faster
 TRAIN_METADATA_DIR     = "../../train.csv"
-KAGGLE_SPECTROGRAM_DIR = "../../train_spectrograms/"
-EEG_SPECTROGRAM_DIR    = "../../EEG_Spectrograms"
+KAGGLE_SPECTROGRAM_DIR = "../../train_spectrograms"
+EEG_SPECTROGRAM_DIR    = "../../eeg_specs.npy"
 
 MODEL_DIR = "experts_only_w_tuchilus"
 
@@ -15,8 +15,8 @@ from lightning.pytorch.loggers import TensorBoardLogger
 from sklearn.model_selection import GroupKFold
 
 from input_utils import modify_train_metadata, TrainDataset, ValidationDataset, \
-    LazySpectrogramFetcher
-from model import KldClassifier, TuchilusEfficientNetB0
+    PreloadedSpectrogramFetcher
+from model import KldClassifier, TuchilusEfficientNetB2
 from constants import TARGETS
 
 NUM_FOLDS = 5
@@ -41,7 +41,7 @@ hard_index = train_metadata["Non-uniformity"] < 5.5
 # Want a numerical indexer
 hard_index = hard_index[hard_index].index
 
-train_fetcher = LazySpectrogramFetcher(KAGGLE_SPECTROGRAM_DIR, EEG_SPECTROGRAM_DIR)
+train_fetcher = PreloadedSpectrogramFetcher(KAGGLE_SPECTROGRAM_DIR, EEG_SPECTROGRAM_DIR)
 train_dataset = TrainDataset(train_metadata, train_fetcher)
 
 val_dataset = ValidationDataset(train_metadata, train_fetcher)
@@ -66,7 +66,7 @@ for i, (train_index, valid_index) in enumerate(
 
     print(f"Fold {i}")
     # Build model
-    tenb0 = TuchilusEfficientNetB0()
+    tenb0 = TuchilusEfficientNetB2()
     # Restricting to only good samples, went down from 17k to 6k
     # So triple each epoch round so same number of training steps
     # The hard index stays the same though at 3177 so lets just keep it

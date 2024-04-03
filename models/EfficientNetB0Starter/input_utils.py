@@ -29,6 +29,11 @@ def preload_eeg_spectrograms(metadata, eeg_dir):
     return spectrograms
 
 
+def preload_precomputed_eeg_spectrograms(eeg_dir):
+    spectrograms = np.load(eeg_dir, allow_pickle=True).item()
+    return spectrograms
+
+
 # Don't need to precompute as cheap to compute
 def modify_train_metadata(train_metadata):
     """Create a new metadata file which integrates all sub_eeg_id."""
@@ -381,10 +386,10 @@ class LazySpectrogramFetcher(Fetcher):
 
 class PreloadedSpectrogramFetcher(Fetcher):
     """Has spectrogram dictionaries which have the data preloaded"""
-    def __init__(self, spectrograms, eeg_spectrograms):
+    def __init__(self, spectrogram_dir, eeg_spectrogram_dir):
 
-        self.spectrograms = spectrograms
-        self.eeg_spectrograms = eeg_spectrograms
+        self.spectrograms = preload_spectrograms(spectrogram_dir)
+        self.eeg_spectrograms = preload_precomputed_eeg_spectrograms(eeg_spectrogram_dir)
 
     def get_spectrogram(self, spectrogram_id):
         return self.spectrograms[spectrogram_id]
