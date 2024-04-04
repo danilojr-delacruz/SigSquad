@@ -23,6 +23,8 @@ def modify_metadata(metadata):
        Make the toal vote distribution across the reconding be the target.
        We are assuming that even though we have multiple sub-recordings, the true target value does not change.
     """
+    num_votes = metadata.iloc[:, -6:].sum(axis=1)
+    metadata = metadata[(num_votes >= 10)]
     # note that other public notebooks calculate the offset differently, but I am not convinced it makes sense
     metadata_grouped = metadata.groupby("eeg_id").agg(
         spectrogram_id     = pd.NamedAgg("spectrogram_id", "first"),
@@ -44,38 +46,61 @@ def rescale(ts, scaler_type):
     if scaler_type == "minmax":
         scaler = TimeSeriesScalerMinMax()
         ts = scaler.fit_transform(ts)
-    elif scaler_type.startswith("meanvar"):
+    elif scaler_type.startswith("meanvarPerChannel"):
         scaler_std = float(scaler_type.split("_")[1])
         scaler = TimeSeriesScalerMeanVariance(std=scaler_std)
-        ts = scaler.fit_transform(ts)
+        ts = scaler.fit_transform(ts, std=scaler_std)
     elif scaler_type.startswith("constant"):
         scaler_constant = float(scaler_type.split("_")[1])
         ts = ts / scaler_constant
+    elif scaler_type.startswith("meanvar"):
+        # this is done later since we atke the variance across all channels
+        pass
     else:
         raise ValueError(f"Unknown scaler type {scaler_type}")
     return ts
 
 def transform_residuals(residuals, scaler_type):
-    # clip roughly 3 standard deviations and above
-    residuals = np.clip(residuals, -300, 300)
     residuals = rescale(residuals.values.reshape(1,-1,1), scaler_type).reshape(-1)
     return residuals
 
-
-def get_residuals(eeg, scaler_type):
+def get_residuals(eeg, scaler_type, group_by_region):
     """Doctors look at the difference between two neighboring channels.
        Calculate the residuals for each channel pair.
-       Group by brain region."""
-    brain_regions = []
-    for region, pair in RESIDUAL_PAIRS.items():
-        # include time as the first dimension and make it go from 0 to 1
-        residuals = [np.linspace(0, 1, len(eeg))]
-        for channel1, channel2 in pair:
-            residual = transform_residuals(eeg[channel1] - eeg[channel2], scaler_type)
-            residuals.append(residual)
-        brain_regions.append(np.stack(residuals).T)
-    return np.stack(brain_regions)
+       Group by brain region.
+       The group_by_region flag is used to determine whether we want to take a signature of the whole 16-dimensional time series or group by region."""
+    if group_by_region:
+        brain_regions = []
+        for region, pair in RESIDUAL_PAIRS.items():
+            # include time as the first dimension and make it go from 0 to 1
+            residuals = []
+            for channel1, channel2 in pair:
+                residual = transform_residuals(eeg[channel1] - eeg[channel2], scaler_type)
+                residuals.append(residual)
+            brain_regions.append(np.stack(residuals).T)
+        brain_regions = np.stack(brain_regions)
+    else:
+        brain_regions = []
+        for region, pair in RESIDUAL_PAIRS.items():
+            for channel1, channel2 in pair:
+                residual = transform_residuals(eeg[channel1] - eeg[channel2], scaler_type)
+                brain_regions.append(residual)
+        brain_regions = np.stack(brain_regions).T
 
+    if scaler_type.startswith("meanvar"):
+        brain_regions = brain_regions - brain_regions.mean(axis=1, keepdims=True)
+        brain_regions = brain_regions / (brain_regions.std()+1e-6)
+    return brain_regions.clip(-4, 4)
+
+def augment_with_time(residuals, group_by_region=True):
+    """ take residuals of the shape (4, 10000, 4) and augment with time to obtain (4, 10000, 5)"""
+    if group_by_region:
+        augmented_regions = []
+        for region_index in range(4):
+            augmented_regions.append(np.concatenate([residuals[region_index], np.linspace(0,1,10000).reshape(-1,1)], axis=1))
+    else:
+        augmented_regions = [np.concatenate([residuals, np.linspace(0,1,10000).reshape(-1,1)], axis=1)]
+    return np.stack(augmented_regions)
 
 def butter_bandpass(lowcut, highcut, fs, order):
     nyq = 0.5 * fs
@@ -84,13 +109,12 @@ def butter_bandpass(lowcut, highcut, fs, order):
     b, a = butter(order, [low, high], btype='band')
     return b, a
 
-
 def butter_bandpass_filter(data, lowcut=0.1, highcut=30, fs=200, order=4):
     b, a = butter_bandpass(lowcut, highcut, fs, order=order)
     y = lfilter(b, a, data, axis=0)
     return y
 
-def preprocess_for_sig(metadata, data_dir, scaler_type):
+def preprocess_for_sig(metadata, data_dir, scaler_type, group_by_region=True):
     """"Preprocess the eeg data to feed into the logsignature function.
         The output tensor is of the shape (paths_to_calculate x  path_length = 10000 x path_dimensions = 5).
         paths to calculate = number_of_eeg_recordings * 4 brain regions for each recording.
@@ -101,12 +125,15 @@ def preprocess_for_sig(metadata, data_dir, scaler_type):
         # eeg is sampled at 200 Hz
         offset = int(data.eeg_offset_seconds * 200 )
         parquet_path = (f"{data_dir}{eeg_id}.parquet")
-        # clip roughly the top and bottom 1% of the data
-        eeg = pd.read_parquet(parquet_path).fillna(0).clip(-1300,2800)
+        eeg = pd.read_parquet(parquet_path)
+        # replace 9999 with 0
+        eeg = eeg.replace(9999, 0)
+        eeg = eeg.fillna(0).clip(-1000,1000)
+        eeg = eeg.iloc[offset:offset+10000]
         # bandpass filter
         eeg = pd.DataFrame(butter_bandpass_filter(eeg), columns=eeg.columns)
-        eeg = eeg.iloc[offset:offset+10000]
-        residuals = get_residuals(eeg, scaler_type)      
+        residuals = get_residuals(eeg, scaler_type, group_by_region)
+        residuals = augment_with_time(residuals, group_by_region)      
         preprocessed.append(residuals)
     preprocessed = np.concatenate(preprocessed, axis=0)
     
@@ -141,5 +168,15 @@ def calculate_signature_for_metadata(metadata, input_data_dir, output_data_dir, 
         size = sigs.shape[1]
         sigs = sigs.reshape(-1,4,size)
         torch.save(sigs, f"{output_data_dir}sigs_lvl_{level}_scaler_{scaler_type}_{i}.pt")
+        if i % (batch_size) == 0:
+            print(f"Processed {i} records.")
+
+def calculate_signature_for_metadata_16_dim(metadata, input_data_dir, output_data_dir, scaler_type, batch_size=100, device="cpu", level=5):
+    """Instead of computing the signature for each brain region separately, we compute one big signature."""
+    for i in range(0, len(metadata), batch_size):
+        preprocessed = preprocess_for_sig(metadata[i:i+batch_size], input_data_dir, scaler_type, group_by_region=False)
+        preprocessed = torch.tensor(preprocessed, dtype=torch.float64).to(device)
+        sigs = calculate_signature(preprocessed, truncation_level=level).cpu()
+        torch.save(sigs, f"{output_data_dir}sigs_lvl_{level}_scaler_{scaler_type}_{i}_16_dim.pt")
         if i % (batch_size) == 0:
             print(f"Processed {i} records.")

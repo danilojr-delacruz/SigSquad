@@ -1,5 +1,5 @@
 import torch
-from model import EnsembleModel
+from model import FlatModel
 import os
 from input_utils import TrainDataset, TestDataset
 from sklearn.model_selection import GroupKFold
@@ -46,7 +46,7 @@ def train(model, train_loader, test_loader, device, criterion, optimizer, early_
 
     return train_losses, test_losses, model
 
-def CV_score(metadata, signature_features, weights, lr, weight_decay, dropout, classifier_input_dim, hidden_layer_dim, device, criterion, early_stopping_epochs, folds=5, save_models=False):
+def CV_score(metadata, signature_features, weights, lr, weight_decay, dropout, hidden_layer_dim, device, criterion, early_stopping_epochs, folds=5, save_models=False):
     """Train and evaluate the model for each data fold.
     """
     scores = []
@@ -64,8 +64,8 @@ def CV_score(metadata, signature_features, weights, lr, weight_decay, dropout, c
         test_dataset = TestDataset(test_metadata, test_signature_features, train_mean, train_std)
         train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=32, shuffle=True)
         test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=len(test_metadata), shuffle=False)
-        sig_dimension = train_dataset[0][0].shape[1]
-        ensemble_model = EnsembleModel(sig_dimension, dropout, classifier_input_dim, hidden_layer_dim)
+        sig_dimension = train_dataset[0][0].shape[0]
+        ensemble_model = FlatModel(sig_dimension, dropout, hidden_layer_dim)
         optimizer = torch.optim.Adam(ensemble_model.parameters(), lr=lr, weight_decay=weight_decay)
         train_loss, test_loss, model = train(ensemble_model, train_loader, test_loader, device, criterion, optimizer, early_stopping_epochs, max_epochs=100)
         train_losses.append(train_loss)
@@ -73,7 +73,7 @@ def CV_score(metadata, signature_features, weights, lr, weight_decay, dropout, c
 
         if save_models:
             # save the model parameters
-            folder_name = f"{lr}_{weight_decay}_{dropout}_{classifier_input_dim}_{hidden_layer_dim}"
+            folder_name = f"{lr}_{weight_decay}_{dropout}_{hidden_layer_dim}"
             if not os.path.exists(f"model_logs/{folder_name}"):
                 os.makedirs(f"model_logs/{folder_name}")
             torch.save(model.state_dict(), f"model_logs/{folder_name}/model_{i}.pt")
