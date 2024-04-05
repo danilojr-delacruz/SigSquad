@@ -94,19 +94,18 @@ class KldClassifier(pl.LightningModule):
         self.log("val_loss", loss, prog_bar=True)
 
 
-eff_oof = torch.concatenate(efficientnet_output["all_oof"], axis=0)
-wave_oof = torch.concatenate(wavenet_output["all_oof"], axis=0)
-
-val_set_size = 32
-X_full = torch.concatenate([eff_oof, wave_oof], axis=1)
-X_train = X_full[:len(X_full)-val_set_size]
-X_val = X_full[len(X_full)-val_set_size:]
-
+eff_oof = torch.concatenate(efficientnet_output["all_oof"][:-1], axis=0)
+wave_oof = torch.concatenate(wavenet_output["all_oof"][:-1], axis=0)
+X_train = torch.concatenate([eff_oof, wave_oof], axis=1)
 # Should be the same among efficientnet and wavenet
-y_full = torch.concatenate(efficientnet_output["all_true"], axis=0)
-y_train = y_full[:len(y_full)-val_set_size]
-y_val = y_full[len(y_full)-val_set_size:]
+y_train = torch.concatenate(efficientnet_output["all_true"][:-1], axis=0)
 
+# Prevent leakeage by working with patient folds
+eff_oof = efficientnet_output["all_oof"][-1]
+wave_oof = wavenet_output["all_oof"][-1]
+X_val = torch.concatenate([eff_oof, wave_oof], axis=1)
+# Should be the same among efficientnet and wavenet
+y_val = efficientnet_output["all_true"][-1]
 
 class TrainDataset(Dataset):
 
@@ -153,8 +152,8 @@ model = KldClassifier(blender)
 logger = TensorBoardLogger("tb_logs")
 trainer = pl.Trainer(min_epochs=70, max_epochs=120,
                      log_every_n_steps=1, accelerator="cuda",
-                     callbacks=[EarlyStopping(
-                         monitor="val_loss", mode="min", patience=5)]
+                    #  callbacks=[EarlyStopping(
+                    #      monitor="val_loss", mode="min", patience=5)]
                      )
 
 train_dataset = TrainDataset(X_train, y_train)
