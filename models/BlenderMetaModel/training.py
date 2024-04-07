@@ -6,15 +6,28 @@ import lightning as pl
 from torch.utils.data import Dataset, DataLoader
 from lightning.pytorch.loggers import TensorBoardLogger
 from lightning.pytorch.callbacks.early_stopping import EarlyStopping
+from lightning.pytorch.callbacks import ModelCheckpoint
 
 
 efficientnet_output = np.load("/home/delacruz-danilojr/delacruz/projects/SigSquad/models/BlenderMetaModel/efficientnet_evaluation_output.npy", allow_pickle=True).item()
 wavenet_output = np.load("/home/delacruz-danilojr/delacruz/projects/SigSquad/models/BlenderMetaModel/wavenet_evaluation_output.npy", allow_pickle=True).item()
 
 
+torch.manual_seed(2962848)
+
+
+activation = "ReLU"
+hidden_layer_width = 16
+
+activation_factory = {
+    "ReLU": torch.nn.ReLU,
+    "Tanh": torch.nn.Tanh,
+}[activation]
+
+
 class Blender(torch.nn.Module):
     "Expecting log probabilities"
-    def __init__(self, num_models=2, hidden_layer_size=64):
+    def __init__(self, num_models=2, hidden_layer_size=hidden_layer_width):
         super().__init__()
         self.num_models = num_models
         self.num_classes = 6
@@ -24,13 +37,13 @@ class Blender(torch.nn.Module):
         self.layers = torch.nn.Sequential(
             # 16 as it's next power of 2 after 12
             torch.nn.Linear(self.num_classes * self.num_models, self.hidden_layer_size, bias=True),
-            torch.nn.ReLU(),
+            activation_factory(),
 
             torch.nn.Linear(self.hidden_layer_size, 2*self.hidden_layer_size, bias=True),
-            torch.nn.ReLU(),
+            activation_factory(),
 
             torch.nn.Linear(2*self.hidden_layer_size, self.hidden_layer_size, bias=True),
-            torch.nn.ReLU(),
+            activation_factory(),
 
             torch.nn.Linear(self.hidden_layer_size, self.num_classes, bias=True),
             torch.nn.LogSoftmax(dim=1)
@@ -46,6 +59,7 @@ class KldClassifier(pl.LightningModule):
     """
     def __init__(self, classifier):
         super().__init__()
+        self.save_hyperparameters()
         self.classifier = classifier
 
     def training_step(self, batch, batch_idx):
@@ -147,11 +161,27 @@ class EarlyStoppingWithWarmup(EarlyStopping):
 
 
 blender = Blender()
-model = KldClassifier(blender)
+# model = KldClassifier.load_from_checkpoint("/home/delacruz-danilojr/delacruz/projects/SigSquad/models/BlenderMetaModel/ReLU_hlw=16_other_seed/model-epoch=34-val_loss=0.4263.ckpt")
+
+config_name = f"{activation}_hlw={hidden_layer_width}_other_seed"
+checkpoint_path = f"/home/delacruz-danilojr/delacruz/projects/SigSquad/models/BlenderMetaModel/{config_name}"
+
+import os; os.makedirs(checkpoint_path, exist_ok=True)
+import shutil; shutil.rmtree(checkpoint_path) # Clear directory
+os.makedirs(checkpoint_path, exist_ok=True)
+
+checkpoint_callback = ModelCheckpoint(
+    monitor="val_loss",
+    dirpath=checkpoint_path,  # directory to save the checkpoints
+    filename="model-{epoch:02d}-{val_loss:.4f}",  # filename template
+    save_top_k=3,  # save the top 3 models based on the monitored quantity
+    mode="min",  # mode for comparison: 'min' or 'max'
+    )
 
 logger = TensorBoardLogger("tb_logs")
-trainer = pl.Trainer(min_epochs=70, max_epochs=120,
+trainer = pl.Trainer(max_epochs=100,
                      log_every_n_steps=1, accelerator="cuda",
+                     callbacks=[checkpoint_callback]
                     #  callbacks=[EarlyStopping(
                     #      monitor="val_loss", mode="min", patience=5)]
                      )
@@ -168,6 +198,3 @@ trainer.fit(model=model,
             )
 
 
-MODEL_DIR = "blend_meta"
-
-torch.save(model.state_dict(), f"{MODEL_DIR}.pt")
