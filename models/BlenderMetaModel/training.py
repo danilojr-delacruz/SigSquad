@@ -11,13 +11,18 @@ from lightning.pytorch.callbacks import ModelCheckpoint
 
 efficientnet_output = np.load("/home/delacruz-danilojr/delacruz/projects/SigSquad/models/BlenderMetaModel/efficientnet_evaluation_output.npy", allow_pickle=True).item()
 wavenet_output = np.load("/home/delacruz-danilojr/delacruz/projects/SigSquad/models/BlenderMetaModel/wavenet_evaluation_output.npy", allow_pickle=True).item()
+resnet_output = np.load("/home/delacruz-danilojr/delacruz/projects/SigSquad/models/BlenderMetaModel/sig_resnet_evaluation_output.npy", allow_pickle=True).item()
 
+
+# Ensure these are tensors
+for i in range(5):
+    resnet_output["all_oof"][i] = torch.tensor(resnet_output["all_oof"][i])
 
 torch.manual_seed(2962848)
 
 
 activation = "ReLU"
-hidden_layer_width = 16
+hidden_layer_width = 32
 
 activation_factory = {
     "ReLU": torch.nn.ReLU,
@@ -27,7 +32,7 @@ activation_factory = {
 
 class Blender(torch.nn.Module):
     "Expecting log probabilities"
-    def __init__(self, num_models=2, hidden_layer_size=hidden_layer_width):
+    def __init__(self, num_models=3, hidden_layer_size=hidden_layer_width):
         super().__init__()
         self.num_models = num_models
         self.num_classes = 6
@@ -39,11 +44,11 @@ class Blender(torch.nn.Module):
             torch.nn.Linear(self.num_classes * self.num_models, self.hidden_layer_size, bias=True),
             activation_factory(),
 
-            torch.nn.Linear(self.hidden_layer_size, 2*self.hidden_layer_size, bias=True),
+            torch.nn.Linear(self.hidden_layer_size, self.hidden_layer_size, bias=True),
             activation_factory(),
 
-            torch.nn.Linear(2*self.hidden_layer_size, self.hidden_layer_size, bias=True),
-            activation_factory(),
+            # torch.nn.Linear(self.hidden_layer_size, self.hidden_layer_size, bias=True),
+            # activation_factory(),
 
             torch.nn.Linear(self.hidden_layer_size, self.num_classes, bias=True),
             torch.nn.LogSoftmax(dim=1)
@@ -108,16 +113,22 @@ class KldClassifier(pl.LightningModule):
         self.log("val_loss", loss, prog_bar=True)
 
 
-eff_oof = torch.concatenate(efficientnet_output["all_oof"][:-1], axis=0)
-wave_oof = torch.concatenate(wavenet_output["all_oof"][:-1], axis=0)
-X_train = torch.concatenate([eff_oof, wave_oof], axis=1)
+# eff_oof = torch.concatenate(efficientnet_output["all_oof"][:-1], axis=0)
+# wave_oof = torch.concatenate(wavenet_output["all_oof"][:-1], axis=0)
+# res_oof = torch.concatenate(resnet_output["all_oof"][:-1], axis=0)
+eff_oof = torch.concatenate(efficientnet_output["all_oof"], axis=0)
+wave_oof = torch.concatenate(wavenet_output["all_oof"], axis=0)
+res_oof = torch.concatenate(resnet_output["all_oof"], axis=0)
+X_train = torch.concatenate([eff_oof, wave_oof, res_oof], axis=1)
 # Should be the same among efficientnet and wavenet
-y_train = torch.concatenate(efficientnet_output["all_true"][:-1], axis=0)
+# y_train = torch.concatenate(efficientnet_output["all_true"][:-1], axis=0)
+y_train = torch.concatenate(efficientnet_output["all_true"], axis=0)
 
 # Prevent leakeage by working with patient folds
 eff_oof = efficientnet_output["all_oof"][-1]
 wave_oof = wavenet_output["all_oof"][-1]
-X_val = torch.concatenate([eff_oof, wave_oof], axis=1)
+res_oof = resnet_output["all_oof"][-1]
+X_val = torch.concatenate([eff_oof, wave_oof, res_oof], axis=1)
 # Should be the same among efficientnet and wavenet
 y_val = efficientnet_output["all_true"][-1]
 
@@ -161,9 +172,10 @@ class EarlyStoppingWithWarmup(EarlyStopping):
 
 
 blender = Blender()
+model = KldClassifier(blender)
 # model = KldClassifier.load_from_checkpoint("/home/delacruz-danilojr/delacruz/projects/SigSquad/models/BlenderMetaModel/ReLU_hlw=16_other_seed/model-epoch=34-val_loss=0.4263.ckpt")
 
-config_name = f"{activation}_hlw={hidden_layer_width}_other_seed"
+config_name = f"three_models_{activation}_hlw={hidden_layer_width}_two_flat_layer"
 checkpoint_path = f"/home/delacruz-danilojr/delacruz/projects/SigSquad/models/BlenderMetaModel/{config_name}"
 
 import os; os.makedirs(checkpoint_path, exist_ok=True)
@@ -179,9 +191,9 @@ checkpoint_callback = ModelCheckpoint(
     )
 
 logger = TensorBoardLogger("tb_logs")
-trainer = pl.Trainer(max_epochs=100,
+trainer = pl.Trainer(max_steps=6000,
                      log_every_n_steps=1, accelerator="cuda",
-                     callbacks=[checkpoint_callback]
+                    #  callbacks=[checkpoint_callback]
                     #  callbacks=[EarlyStopping(
                     #      monitor="val_loss", mode="min", patience=5)]
                      )
@@ -189,12 +201,13 @@ trainer = pl.Trainer(max_epochs=100,
 train_dataset = TrainDataset(X_train, y_train)
 train_loader = DataLoader(train_dataset, batch_size=32, num_workers=3)
 
-val_dataset = TrainDataset(X_val, y_val)
-val_loader = DataLoader(val_dataset, batch_size=32, num_workers=3)
+# val_dataset = TrainDataset(X_val, y_val)
+# val_loader = DataLoader(val_dataset, batch_size=32, num_workers=3)
 
 trainer.fit(model=model,
             train_dataloaders=train_loader,
-            val_dataloaders=val_loader,
+            # val_dataloaders=val_loader,
             )
 
+torch.save(model.state_dict(), "trained_all_data_20_epochs_more_layers.pt")
 
